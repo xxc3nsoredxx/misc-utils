@@ -1,0 +1,38 @@
+#! /bin/bash
+
+# Only run as root
+if [ $(id -u) -ne 0 ]; then
+    echo "Snapshots must be created as root"
+    exit -1
+fi
+
+declare -A SNAPSHOTS
+BTRFS_SNAPSHOTS=/root/btrfs_snapshots
+SD_SNAPSHOTS=/root/sd_snapshots
+SNAPSHOTS=(['/']='root' ['/root']='root_home' ['/home']='home')
+NAME=$(date -I)
+
+mount $BTRFS_SNAPSHOTS
+mount $SD_SNAPSHOTS
+
+for target in ${!SNAPSHOTS[@]}; do
+    btrfs subvolume snapshot -r $target $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/$NAME
+    sync
+
+    # Get the list of snapshots
+    list=($(ls $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}))
+
+    # Determine if incremental send is used
+    if [ ${#list[@]} -ge 2 ]; then
+        echo "Previous snapshot of $target is at $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-2]}"
+        btrfs send -p $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-2]} $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-1]} | btrfs receive $SD_SNAPSHOTS/${SNAPSHOTS[$target]}
+        sync
+    else
+        echo "No previous snapshot to use as base"
+        btrfs send $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-1]} | btrfs receive $SD_SNAPSHOTS/${SNAPSHOTS[$target]}
+        sync
+    fi
+done
+
+umount $BTRFS_SNAPSHOTS
+umount $SD_SNAPSHOTS
