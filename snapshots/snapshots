@@ -6,33 +6,36 @@ if [ $(id -u) -ne 0 ]; then
     exit -1
 fi
 
-declare -A SNAPSHOTS
-BTRFS_SNAPSHOTS=/root/btrfs_snapshots
-SD_SNAPSHOTS=/root/sd_snapshots
-SNAPSHOTS=(['/']='root' ['/root']='root_home' ['/home']='home')
+declare -A SUBVOLUMES
+SRC_SNAPSHOTS=/root/btrfs_snapshots
+DEST_SNAPSHOTS=/root/sd_snapshots
+SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
 NAME=$(date -I)
 
-mount $BTRFS_SNAPSHOTS
-mount $SD_SNAPSHOTS
+mount $SRC_SNAPSHOTS
+mount $DEST_SNAPSHOTS
 
-for target in ${!SNAPSHOTS[@]}; do
-    btrfs subvolume snapshot -r $target $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/$NAME
+for target in ${!SUBVOLUMES[@]}; do
+    target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
+    target_dest=$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}
+
+    btrfs subvolume snapshot -r $target $target_src/$NAME
     sync
 
     # Get the list of snapshots
-    list=($(ls $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}))
+    list=($(ls $target_src))
 
     # Determine if incremental send is used
     if [ ${#list[@]} -ge 2 ]; then
-        echo "Previous snapshot of $target is at $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-2]}"
-        btrfs send -p $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-2]} $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-1]} | btrfs receive $SD_SNAPSHOTS/${SNAPSHOTS[$target]}
+        echo "Previous snapshot of $target is at $target_src/${list[-2]}"
+        btrfs send -p $target_src/${list[-2]} $target_src/${list[-1]} | btrfs receive $target_dest
         sync
     else
         echo "No previous snapshot to use as base"
-        btrfs send $BTRFS_SNAPSHOTS/${SNAPSHOTS[$target]}/${list[-1]} | btrfs receive $SD_SNAPSHOTS/${SNAPSHOTS[$target]}
+        btrfs send $target_src/${list[-1]} | btrfs receive $target_dest
         sync
     fi
 done
 
-umount $BTRFS_SNAPSHOTS
-umount $SD_SNAPSHOTS
+umount $SRC_SNAPSHOTS
+umount $DEST_SNAPSHOTS
