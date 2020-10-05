@@ -1,0 +1,23 @@
+#! /bin/bash
+
+# Must be run as root
+if [ $(id -u) -ne 0 ]; then
+    echo "$0 must be run as root"
+    exit -1
+fi
+
+SAVE_DIR="/etc/portage/savedconfig/sys-kernel"
+SAVE_FILE=$(ls $SAVE_DIR)
+
+cp $SAVE_DIR/$SAVE_FILE ~/$SAVE_FILE.bu
+rm $SAVE_DIR/$SAVE_FILE
+for i in $(lsmod | tail +2 | cut -d ' ' -f 1 | xargs modinfo | grep -i 'firmware:' | tr -s ' ' | cut -d ' ' -f 2); do
+    echo -n "$i: "
+    if [ "$(grep -q $i ~/$SAVE_FILE.bu)" == '0' ]; then
+        echo "NOT found, NOT added"
+    else
+        echo $i >> $SAVE_DIR/$SAVE_FILE
+        echo "added"
+    fi
+done
+emerge sys-kernel/linux-firmware
