@@ -19,11 +19,11 @@ The default snapshot name is of the form `YYYY-MM-DD` which means it doesn't mak
 
 ## only_required_firmware
 
-A bash script to filter the config file for the Gentoo package `sys-kernl/linux-firmware`.
+A bash script to filter the config file for the Gentoo package `sys-kernel/linux-firmware`.
 Parses the output of `modinfo` for each module given by `lsmod` for required firmware files.
 Re-emerges the package at the end.
 
-Requirements:
+### Requirements
 
  * Must be run as root
  * `savedconfig` USE flag for `sys-kernel/linux-firmware` is set
