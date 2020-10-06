@@ -42,4 +42,7 @@ The other way around works just fine -- desktop Wikipedia on a mobile browser re
 Currently only has Wikipedia listed in the URLs to convert.
 More will be added if/as needed.
 
-[Click here to install the usersctipt](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
+You can use the Wikipedia link above to conveniently test the script after installation.
+A completely unintentional side effect of the link automatically being generated for the text.
+
+[Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
