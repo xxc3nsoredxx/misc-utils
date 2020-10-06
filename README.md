@@ -41,4 +41,5 @@ Inspired by all the people on Reddit posting links to https://en.m.wikipedia.org
 The other way around works just fine -- desktop Wikipedia on a mobile browser redirects to mobile Wikipedia.
 Currently only has Wikipedia listed in the URLs to convert.
 More will be added if/as needed.
+
 [Click here to install the usersctipt](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
