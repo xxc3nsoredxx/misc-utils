@@ -27,3 +27,17 @@ Re-emerges the package at the end.
 
  * Must be run as root
  * `savedconfig` USE flag for `sys-kernel/linux-firmware` is set
+
+## userscripts
+
+A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
+Eventually.
+Currently there is just the one.
+
+### mobile_to_desktop
+
+Redirects a mobile page to a desktop page.
+Inspired by all the people on Reddit posting links to https://en.m.wikipedia.org which, for some reason, doesn't go to the desktop page on desktop browsers.
+The other way around works just fine -- desktop Wikipedia on a mobile browser redirects to mobile Wikipedia.
+Currently only has Wikipedia listed in the URLs to convert.
+More will be added if/as needed.
