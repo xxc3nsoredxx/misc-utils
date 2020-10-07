@@ -11,7 +11,7 @@ The default snapshot name is of the form `YYYY-MM-DD`.
 Designed to be run at regular intervals in a cron job.
 The script can be run repeatedly to verify that snapshots have been taken.
 This means that if the machine was not powered on when the regular scheduled run would take place, a snapshot would be made next time the script is run.
-My setup takes a snapshot every Saturday, but checks every hour to make sure the snapshots aren't out of date.
+My setup takes a snapshot every Saturday, but checks every 3 hours to make sure the snapshots aren't out of date.
 
  * `SRC_SNAPSHOTS` is the path to the main snapshot subvolume
  * `DEST_SNAPSHOTS` is the path to the backup snapshot subvolume (prefarably on a separate storage medium)
