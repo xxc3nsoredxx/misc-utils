@@ -11,6 +11,7 @@ SRC_SNAPSHOTS=/root/btrfs_snapshots
 DEST_SNAPSHOTS=/root/sd_snapshots
 SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
 NAME=$(date -I)
+DESIRED_PREV=$(date -I --date='last saturday')
 
 mount $SRC_SNAPSHOTS
 mount $DEST_SNAPSHOTS
@@ -19,23 +20,48 @@ for target in ${!SUBVOLUMES[@]}; do
     target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
     target_dest=$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}
 
-    btrfs subvolume snapshot -r $target $target_src/$NAME
-    sync
-
     # Get the list of snapshots
-    list=($(ls $target_src))
+    list_src=($(ls $target_src))
+    list_dest=($(ls $target_dest))
 
-    # Determine if incremental send is used
-    if [ ${#list[@]} -ge 2 ]; then
-        echo "Previous snapshot of $target is at $target_src/${list[-2]}"
-        btrfs send -p $target_src/${list[-2]} $target_src/${list[-1]} | btrfs receive $target_dest
+    # If no snapshots exist, make one
+    if [ ${#list_src[@]} -eq 0 ]; then
+        echo "No existing snapshots found for $target"
+        btrfs subvolume snapshot -r $target $target_src/$NAME
         sync
-    else
-        echo "No previous snapshot to use as base"
-        btrfs send $target_src/${list[-1]} | btrfs receive $target_dest
+        list_src=($NAME)
+    fi
+
+    src_prev=${list_src[-1]}
+
+    # Check if most recent src snapshot is up to date
+    if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
+        echo "SRC snapshot '$target_src/$src_prev' is out of date"
+
+        btrfs subvolume snapshot -r $target $target_src/$NAME
         sync
+        list_src=(${list_src[@]} $NAME)
+        src_prev=$NAME
+    fi
+
+    # Check if most recent dest snapshot is up to date
+    dest_prev=${list_dest[-1]}
+
+    if [[ "$dest_prev" < "$src_prev" ]]; then
+        echo "DEST snapshot '$target_dest/$dest_prev' is out of date"
+
+        # Determine if incremental send is used
+        if [ ${#list_src[@]} -ge 2 ]; then
+            echo "Previous snapshot of $target is at $target_src/${list_src[-2]}"
+            btrfs send -p $target_src/${list_src[-2]} $target_src/${list_src[-1]} | btrfs receive $target_dest
+            sync
+        else
+            echo "No previous snapshot to use as base"
+            btrfs send $target_src/${list_src[-1]} | btrfs receive $target_dest
+            sync
+        fi
     fi
 done
 
-umount $SRC_SNAPSHOTS
 umount $DEST_SNAPSHOTS
+umount $SRC_SNAPSHOTS

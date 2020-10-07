@@ -7,8 +7,11 @@ A collection of miscellaneous little utils that I don't feel deserve a full repo
 A bash script for taking snapshots of a BTRFS filesystem.
 Uses the number of existing snapshots of a given subvolume to determine if incremental send is used.
 Assumes that the destination has *at least* the same snapshots as the source.
+The default snapshot name is of the form `YYYY-MM-DD`.
 Designed to be run at regular intervals in a cron job.
-The default snapshot name is of the form `YYYY-MM-DD` which means it doesn't make sense to run more than once every 24 hours.
+The script can be run repeatedly to verify that snapshots have been taken.
+This means that if the machine was not powered on when the regular scheduled run would take place, a snapshot would be made next time the script is run.
+My setup takes a snapshot every Saturday, but checks every hour to make sure the snapshots aren't out of date.
 
  * `SRC_SNAPSHOTS` is the path to the main snapshot subvolume
  * `DEST_SNAPSHOTS` is the path to the backup snapshot subvolume (prefarably on a separate storage medium)
@@ -16,6 +19,9 @@ The default snapshot name is of the form `YYYY-MM-DD` which means it doesn't mak
  * `NAME` is the name given to each snapshot
     * Must be unique each time the script is run
     * Must be sortable in chronological order by name
+ * `DESIRED_PREV` is the name that would have been given to the snapshot during a regular run
+    * Used to compare with the latest existing snapshot
+    * Sets the frequency that snapshots will be made
 
 ## only_required_firmware
 
