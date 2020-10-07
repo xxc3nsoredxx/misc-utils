@@ -29,7 +29,9 @@ for target in ${!SUBVOLUMES[@]}; do
         echo "No existing snapshots found for $target"
         btrfs subvolume snapshot -r $target $target_src/$NAME
         sync
-        list_src=($NAME)
+        btrfs send $target_src/$NAME | btrfs receive $target_dest
+        sync
+        continue
     fi
 
     src_prev=${list_src[-1]}
