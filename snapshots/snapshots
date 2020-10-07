@@ -12,6 +12,7 @@ DEST_SNAPSHOTS=/root/sd_snapshots
 SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
 NAME=$(date -I)
 DESIRED_PREV=$(date -I --date='last saturday')
+EXPIRED=$(date -I --date='5 weeks ago')
 
 mount $SRC_SNAPSHOTS
 mount $DEST_SNAPSHOTS
@@ -61,6 +62,17 @@ for target in ${!SUBVOLUMES[@]}; do
             echo "No previous snapshot to use as base"
             btrfs send $target_src/${list_src[-1]} | btrfs receive $target_dest
             sync
+        fi
+
+        # Check for expired src snapshots
+        # Only delete if there are > 2 snapshots so that incremental send works
+        if [ ${#list_src[@]} -gt 2 ]; then
+            if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
+                echo "Expired snapshot '$target_src/${list_src[0]}'"
+                btrfs subvolume delete $target_src/${list_src[0]}
+            fi
+        else
+            echo "Not enough snapshots in '$target_src' to expire"
         fi
     fi
 done

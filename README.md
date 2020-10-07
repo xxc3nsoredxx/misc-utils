@@ -11,7 +11,9 @@ The default snapshot name is of the form `YYYY-MM-DD`.
 Designed to be run at regular intervals in a cron job.
 The script can be run repeatedly to verify that snapshots have been taken.
 This means that if the machine was not powered on when the regular scheduled run would take place, a snapshot would be made next time the script is run.
-My setup takes a snapshot every Saturday, but checks every 3 hours to make sure the snapshots aren't out of date.
+Also deletes old snapshots after `btrfs send | btrfs receive` is done.
+No snapshots are deleted unless there are at least 2 remaining.
+My setup takes a snapshot every Saturday, checks every 3 hours to make sure the snapshots aren't out of date, and deletes snapshots that are > 5 weeks old.
 
  * `SRC_SNAPSHOTS` is the path to the main snapshot subvolume
  * `DEST_SNAPSHOTS` is the path to the backup snapshot subvolume (prefarably on a separate storage medium)
@@ -22,6 +24,7 @@ My setup takes a snapshot every Saturday, but checks every 3 hours to make sure 
  * `DESIRED_PREV` is the name that would have been given to the snapshot during a regular run
     * Used to compare with the latest existing snapshot
     * Sets the frequency that snapshots will be made
+ * `EXPIRED` is the name of the oldest snapshot you want to keep on the main snapshot volume
 
 ## only_required_firmware
 
