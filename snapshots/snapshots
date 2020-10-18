@@ -63,6 +63,7 @@ for target in ${!SUBVOLUMES[@]}; do
             btrfs send $target_src/${list_src[-1]} | btrfs receive $target_dest
             sync
         fi
+        echo "Sending $target_src/${list_src[-1]} complete"
 
         # Check for expired src snapshots
         # Only delete if there are > 2 snapshots so that incremental send works
