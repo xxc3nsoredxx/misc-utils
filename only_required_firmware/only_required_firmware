@@ -6,17 +6,25 @@ if [ $(id -u) -ne 0 ]; then
     exit -1
 fi
 
-SAVE_DIR="/etc/portage/savedconfig/sys-kernel"
-SAVE_FILE=$(ls $SAVE_DIR)
+# The most recent one should be the one just installed
+SAVEDCONFIG="/etc/portage/savedconfig/sys-kernel"
+SAVES=($(ls $SAVEDCONFIG/linux-firmware* | xargs basename -a))
+TARGET=${SAVES[-1]}
 
-cp $SAVE_DIR/$SAVE_FILE ~/$SAVE_FILE.bu
-rm $SAVE_DIR/$SAVE_FILE
+echo "Making a backup of the full list into $HOME/$TARGET.bu"
+cp $SAVEDCONFIG/$TARGET $HOME/$TARGET.bu
+
+# Create a clean slate
+for i in ${SAVES[@]}; do
+    rm $SAVEDCONFIG/$i
+done
+
 for i in $(lsmod | tail +2 | cut -d ' ' -f 1 | xargs modinfo | grep -i 'firmware:' | tr -s ' ' | cut -d ' ' -f 2); do
     echo -n "$i: "
-    if [ "$(grep -q $i ~/$SAVE_FILE.bu)" == '0' ]; then
+    if [ "$(grep -q $i $HOME/$TARGET.bu)" == '0' ]; then
         echo "NOT found, NOT added"
     else
-        echo $i >> $SAVE_DIR/$SAVE_FILE
+        echo $i >> $SAVEDCONFIG/$TARGET
         echo "added"
     fi
 done
