@@ -10,16 +10,16 @@ Assumes that the destination has *at least* the same snapshots as the source.
 The default snapshot name is of the form `YYYY-MM-DD`.
 Designed to be run at regular intervals in a cron job.
 The script can be run repeatedly to verify that snapshots have been taken.
-This means that if the machine was not powered on when the regular scheduled run would take place, a snapshot would be made next time the script is run.
+This means that if the machine was not powered on when the regularly scheduled run would take place, a snapshot would be made next time the script is run.
 Also deletes old snapshots after `btrfs send | btrfs receive` is done.
 No snapshots are deleted unless there are at least 2 remaining.
-My setup takes a snapshot every Saturday, checks every 3 hours to make sure the snapshots aren't out of date, and deletes snapshots that are > 5 weeks old.
+My setup takes a snapshot every Saturday, checks every 3 hours (at the bottom of the hour) to make sure the snapshots aren't out of date, and deletes snapshots that are > 5 weeks old.
 
  * `SRC_SNAPSHOTS` is the path to the main snapshot subvolume
  * `DEST_SNAPSHOTS` is the path to the backup snapshot subvolume (prefarably on a separate storage medium)
  * `SUBVOLUMES` is an associative array of `[path] -> [subvolume name]` to describe what needs to be snapshotted
- * `NAME` is the name given to each snapshot
-    * Must be unique each time the script is run
+ * `NAME` is the name given to a snapshot
+    * Must be unique each time a snapshot is taken
     * Must be sortable in chronological order by name
  * `DESIRED_PREV` is the name that would have been given to the snapshot during a regular run
     * Used to compare with the latest existing snapshot
@@ -30,7 +30,8 @@ My setup takes a snapshot every Saturday, checks every 3 hours to make sure the 
 
 A bash script to filter the config file for the Gentoo package `sys-kernel/linux-firmware`.
 Parses the output of `modinfo` for each module given by `lsmod` for required firmware files.
-Re-emerges the package at the end.
+I recommend rebooting after updating the package so that any new firmware files get loaded and are found by the script.
+Re-emerges the package at the end (which will clean up any installed but unused firmware files from the system).
 
 ### Requirements
 

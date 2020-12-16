@@ -19,6 +19,7 @@ for i in ${SAVES[@]}; do
     rm $SAVEDCONFIG/$i
 done
 
+# Filter by currently used firmware
 for i in $(lsmod | tail +2 | cut -d ' ' -f 1 | xargs modinfo | grep -i 'firmware:' | tr -s ' ' | cut -d ' ' -f 2); do
     echo -n "$i: "
     if [ "$(grep -q $i $HOME/$TARGET.bu)" == '0' ]; then
