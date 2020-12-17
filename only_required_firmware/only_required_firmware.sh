@@ -27,23 +27,30 @@ fi
 SAVEDCONFIG="/etc/portage/savedconfig/sys-kernel"
 SAVES=($(ls $SAVEDCONFIG/linux-firmware* | xargs basename -a))
 TARGET=${SAVES[-1]}
+# Directory to save backups to
+BU_DIR=$HOME/config_backups
 
-echo "Making a backup of the full list into $HOME/$TARGET.bu"
-cp $SAVEDCONFIG/$TARGET $HOME/$TARGET.bu
+# Ensure backup directory exists
+mkdir -p $BU_DIR
+
+echo "Making a backup of the full list into $BU_DIR/$TARGET.bu"
+cp $SAVEDCONFIG/$TARGET $BU_DIR/$TARGET.bu
 
 # Create a clean slate
-for i in ${SAVES[@]}; do
-    rm $SAVEDCONFIG/$i
+for CONFIG in ${SAVES[@]}; do
+    rm $SAVEDCONFIG/$CONFIG
 done
 
 # Filter by currently used firmware
-for i in $(lsmod | tail +2 | cut -d ' ' -f 1 | xargs modinfo | grep -i 'firmware:' | tr -s ' ' | cut -d ' ' -f 2); do
-    echo -n "$i: "
-    if [ "$(grep -q $i $HOME/$TARGET.bu)" == '0' ]; then
-        echo "NOT found, NOT added"
+for FW in $(lsmod | tail +2 | cut -d ' ' -f 1 | xargs modinfo | grep -i 'firmware:' | tr -s ' ' | cut -d ' ' -f 2); do
+    echo -n "$FW: "
+    if [ "$(grep -q $FW $BU_DIR/$TARGET.bu)" == '0' ]; then
+        echo 'NOT found, NOT added'
     else
-        echo $i >> $SAVEDCONFIG/$TARGET
-        echo "added"
+        echo "$FW" >> $SAVEDCONFIG/$TARGET
+        echo 'added'
     fi
 done
+
+# Re-emerge to only include the needed firmware
 emerge sys-kernel/linux-firmware
