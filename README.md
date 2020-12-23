@@ -26,7 +26,6 @@ Re-emerges the package at the end (which will clean up any installed but unused 
 If root is logged in, locks the machine requiring the root password to unlock.
 Works for physical logins as well as `su(1)`.
 Companion script for [locking the machine when my Yubikey is removed][yubikey].
-TODO: REPLACE THE LINK WITH THE WORKING LINK ONCE THE YUBIKEY GUIDE IS UPLOADED.
 
 ### Requirements
  * Must be run as root
