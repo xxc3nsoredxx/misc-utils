@@ -74,4 +74,4 @@ A completely unintentional side effect of the link automatically being generated
 
 
 <!-- link refs -->
-[yubikey]: https://example.com
+[yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
