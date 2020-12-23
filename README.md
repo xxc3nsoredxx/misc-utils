@@ -22,6 +22,16 @@ Re-emerges the package at the end (which will clean up any installed but unused 
  * Must be run as root
  * `savedconfig` USE flag for `sys-kernel/linux-firmware` is set
 
+## root_lock
+If root is logged in, locks the machine requiring the root password to unlock.
+Works for physical logins as well as `su(1)`.
+Companion script for [locking the machine when my Yubikey is removed][yubikey].
+TODO: REPLACE THE LINK WITH THE WORKING LINK ONCE THE YUBIKEY GUIDE IS UPLOADED.
+
+### Requirements
+ * Must be run as root
+   * Designed to be run as part of a system service
+
 ## snapshots
 A bash script for taking snapshots of a BTRFS filesystem.
 Uses the number of existing snapshots of a given subvolume to determine if incremental send is used.
@@ -61,3 +71,7 @@ You can use the Wikipedia link above to conveniently test the script after insta
 A completely unintentional side effect of the link automatically being generated for the text.
 
 [Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
+
+
+<!-- link refs -->
+[yubikey]: https://example.com
