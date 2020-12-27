@@ -1,6 +1,19 @@
 # misc-utils
-
 A collection of miscellaneous little utils that I don't feel deserve a full repo.
+
+## cross_arm
+Creates an ARM cross-compiler toolchain.
+Originally created for a class that dealt with ARM binaries in some assignments.
+Should work for Raspberry Pi's since that's what the assignment test server was running (don't remember which model).
+Definitely works for compiling against QEMU's ARM userspace emulation since that's what I used to test my code locally.
+
+Adapting the script for other architectures should only require changing the `TARGET*` and `CONF_*` variables.
+
+### Requirements
+ * Must be run as root
+ * `sys-deve/crossdev`
+ * `app-portage/gentoolkit`
+   * Uses `equery(1)` to determine existing package version
 
 ## genhash
 Creates an `/etc/shadow`-friendly SHA-512 hash given a password and a salt.
