@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#   Script to build arm toolchain on x86_64 using crossdev
+#   Script to build ARM cross-compiler toolchain
 #   Copyright (C) 2020  xxc3nsoredxx
 #
 #   This program is free software: you can redistribute it and/or modify
