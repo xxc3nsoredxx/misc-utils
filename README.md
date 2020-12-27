@@ -9,6 +9,9 @@ Definitely works for compiling against QEMU's ARM userspace emulation since that
 
 Adapting the script for other architectures should only require changing the `TARGET*` and `CONF_*` variables.
 
+The toolchain is installed into an overlay called `cross-$TARGET` and each tool is installed as `$TARGET-*`.
+For example, the version of GCC which is installed can be invoked using `$TARGET-gcc`.
+
 ### Requirements
  * Must be run as root
  * `sys-devel/crossdev`
