@@ -11,7 +11,7 @@ Adapting the script for other architectures should only require changing the `TA
 
 ### Requirements
  * Must be run as root
- * `sys-deve/crossdev`
+ * `sys-devel/crossdev`
  * `app-portage/gentoolkit`
    * Uses `equery(1)` to determine existing package version
 
