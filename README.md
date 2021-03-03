@@ -72,8 +72,6 @@ My setup takes a snapshot every Saturday, checks every 3 hours (at the bottom of
 
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
-Eventually.
-Currently there is just the one.
 
 ### mobile_to_desktop
 Redirects a mobile page to a desktop page.
