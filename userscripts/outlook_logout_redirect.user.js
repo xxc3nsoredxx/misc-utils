@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name        Outlook Logout Redirect
-// @version     1.1
+// @namespace   https://github.com/xxc3nsoredxx/misc-utils/
+// @version     1.2
 // @description Redirect to login page after logout message appears
 // @match       *://login.microsoftonline.com/common/oauth2/logout
 // @run-at      document-idle
