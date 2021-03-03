@@ -87,6 +87,16 @@ A completely unintentional side effect of the link automatically being generated
 
 [Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
 
+### outlook_logout_redirect
+Sometimes the Outlook session will be automatically logged out.
+When this happens, going to Outlook instead gives an annoying page that says "You signed out of your account."
+This requires going _back to the address bar_ to enter the Outlook URL again which will go to the login page.
+
+This userscript automatically redirects to Outlook when the annoying page is detected.
+
+[Click here to install the userscript][outlook redir]
+
 
 <!-- link refs -->
 [yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
+[outlook redir]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/outlook_logout_redirect.user.js
