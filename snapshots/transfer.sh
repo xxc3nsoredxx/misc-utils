@@ -1,10 +1,31 @@
 #! /bin/bash
 
 
+# Flags to control what is cleaned up
+LUKS_OPENED=0
+LUKS_MOUNTED=0
+SRC_MOUNTED=0
 
-# Send all output to syslog
-exec 1> >(logger --id=$$ --stderr --priority daemon.info --tag ss_crypt_transfer)
-exec 2> >(logger --id=$$ --stderr --priority daemon.err --tag ss_crypt_transfer)
+# Close LUKS and unmount if needed
+cleanup () {
+    if [ $SRC_MOUNTED -eq 1 ]; then
+        umount $SRC_SNAPSHOTS \
+            || die "Failed to unmount $SRC_SNAPSHOTS"
+        log "Unmounted $SRC_SNAPSHOTS"
+    fi
+
+    if [ $LUKS_MOUNTED -eq 1 ]; then
+        umount $DEST_SNAPSHOTS \
+            || die "Failed to unmount $DEST_SNAPSHOTS"
+        log "Unmounted $DEST_SNAPSHOTS"
+    fi
+
+    if [ $LUKS_OPENED -eq 1]; then
+        cryptsetup close $LUKS_NAME \
+            || die "Failed to close $LUKS_NAME"
+        log "Closed $LUKS_NAME"
+    fi
+}
 
 # Send message to syslog
 # arg1: message
@@ -19,14 +40,17 @@ die () {
     exit 1
 }
 
+# Send all output to syslog
+exec 1> >(logger --id=$$ --stderr --priority daemon.info --tag ss_crypt_transfer)
+exec 2> >(logger --id=$$ --stderr --priority daemon.err --tag ss_crypt_transfer)
+
+# Install exit handler
+trap cleanup EXIT
+
 # Only run as root
 if [ $(id -u) -ne 0 ]; then
     die "Snapshots can only be transferred as root"
 fi
-
-log "Test log"
-die "Test error"
-
 
 declare -A SUBVOLUMES
 SRC_SNAPSHOTS=/root/sd_snapshots
@@ -49,14 +73,17 @@ EXPIRED=$(date -I --date='5 weeks ago')
 cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME \
     || die "Failed to open $LUKS_DEVICE as $LUKS_NAME"
 log "Opened $LUKS_DEVICE as $LUKS_NAME"
+LUKS_OPENED=1
 mount $DEST_SNAPSHOTS \
     || die "Failed to mount $LUKS_NAME onto $DEST_SNAPSHOTS"
 log "Mounted $LUKS_NAME onto $DEST_SNAPSHOTS"
+LUKS_MOUTED=1
 
 # Mount the snapshot source
 mount $SRC_SNAPSHOTS \
     || die "Failed to mount $SRC_SNAPSHOTS"
 log "Mounted $SRC_SNAPSHOTS"
+SRC_MOUNTED=1
 
 exit
 
@@ -121,14 +148,3 @@ for target in ${!SUBVOLUMES[@]}; do
 #        fi
 #    fi
 done
-
-umount $SRC_SNAPSHOTS \
-    || die "Failed to unmount $SRC_SNAPSHOTS"
-log "Unmounted $SRC_SNAPSHOTS"
-
-umount $DEST_SNAPSHOTS \
-    || die "Failed to unmount $DEST_SNAPSHOTS"
-log "Unmounted $DEST_SNAPSHOTS"
-cryptsetup close $LUKS_NAME \
-    || die "Failed to close $LUKS_NAME"
-log "Closed $LUKS_NAME"
