@@ -104,6 +104,8 @@ if [ ! -e $LUKS_DEVICE ]; then
     die "$LUKS_DEVICE not found"
 fi
 
+# TODO: handle already mounted/opened
+
 # Open LUKS crypt and mount the filesystem inside
 cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME \
     || die "Failed to open $LUKS_DEVICE as $LUKS_NAME"
@@ -120,9 +122,11 @@ mount $SRC_SNAPSHOTS \
 log "Mounted $SRC_SNAPSHOTS"
 SRC_MOUNTED=1
 
-log "oldest: $OLDEST"
+log "Transfer cutoff: $OLDEST"
 # Loop through the keys of the $SUBVOLUMES map
 for target in ${!SUBVOLUMES[@]}; do
+    log "'$target' snapshots:"
+
     target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
     target_dest=$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}
 
@@ -130,11 +134,38 @@ for target in ${!SUBVOLUMES[@]}; do
     list_src=($(ls $target_src))
     list_dest=($(ls $target_dest))
 
-    # Print snapshots destined for transfer
-    log "'$target' snapshots to move:"
+    # Get the most recent snapshot on the destination drive to use as a base
+    dest_prev=''
+    if [ ${#list_dest} -eq 0 ]; then
+        log "No '$target' snapshots on $LUKS_NAME"
+    else
+        dest_prev=${list_dest[-1]}
+        log "Most recent '$target' snapshot on $LUKS_NAME: $dest_prev"
+    fi
+
+    # Transfer snapshots
+    # TODO: check status of btrfs send | btrfs receive for errors
     for ss in "${list_src[@]}"; do
         if [[ "$ss" < "$OLDEST" ]]; then
-            log "$ss"
+            # Handle no previous snapshot case
+            if [ -z $dest_prev ]; then
+                log "Sending $ss with no base snapshot"
+            # Handle snapshot already exists
+            # Newest on destination, oldest on source
+            # Used to set the base when not starting from a blank slate
+            elif [ "$ss" == "$dest_prev" ]; then
+                log "$ss already exists on $LUKS_NAME, skipped"
+            else
+                log "Sending $ss using $dest_prev as the base"
+
+                # Deleting only the base snapshot preserves the most recent
+                # moved snapshot to use as a base in the future
+                # TODO: delete the base snapshot from the source
+                log "Deleting $dest_prev from source"
+            fi
+
+            # Update base
+            dest_prev=$ss
         fi
     done
 
