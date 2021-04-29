@@ -1,64 +1,13 @@
 #! /bin/bash
 
 
-# Flags to control what is cleaned up
-LUKS_OPENED=0
-LUKS_MOUNTED=0
-SRC_MOUNTED=0
-
-# Close LUKS and unmount if needed
-cleanup () {
-    if [ $SRC_MOUNTED -eq 1 ]; then
-        umount $SRC_SNAPSHOTS \
-            || die "Failed to unmount $SRC_SNAPSHOTS"
-        log "Unmounted $SRC_SNAPSHOTS"
-    fi
-
-    if [ $LUKS_MOUNTED -eq 1 ]; then
-        umount $DEST_SNAPSHOTS \
-            || die "Failed to unmount $DEST_SNAPSHOTS"
-        log "Unmounted $DEST_SNAPSHOTS"
-    fi
-
-    if [ $LUKS_OPENED -eq 1]; then
-        cryptsetup close $LUKS_NAME \
-            || die "Failed to close $LUKS_NAME"
-        log "Closed $LUKS_NAME"
-    fi
-}
-
-# Send message to syslog
-# arg1: message
-log () {
-    echo "$@"
-}
-
-# Send error to syslog and abort
-# arg1: error message
-die () {
-    echo "$@" >&2
-    exit 1
-}
-
-# Send all output to syslog
-exec 1> >(logger --id=$$ --stderr --priority daemon.info --tag ss_crypt_transfer)
-exec 2> >(logger --id=$$ --stderr --priority daemon.err --tag ss_crypt_transfer)
-
-# Install exit handler
-trap cleanup EXIT
-
-# Only run as root
-if [ $(id -u) -ne 0 ]; then
-    die "Snapshots can only be transferred as root"
-fi
-
 declare -A SUBVOLUMES
 SRC_SNAPSHOTS=/root/sd_snapshots
 DEST_SNAPSHOTS=/root/snapshot_crypt/mnt
 LUKS_KEYFILE=/root/snapshot_crypt/ss_crypt.keyfile.txt
-# Block device passed in as arg 1
-LUKS_DEVICE=$1
-LUKS_NAME='ss_crypt'
+# udev creates a symlink /dev/ss_crypt pointing to the partition
+LUKS_DEVICE=/dev/ss_crypt
+LUKS_NAME=ss_crypt
 SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
 
 # Oldest snapshot to keep on sd card
@@ -69,6 +18,92 @@ NAME=$(date -I)
 DESIRED_PREV=$(date -I --date='last saturday')
 EXPIRED=$(date -I --date='5 weeks ago')
 
+# Flags to control what is cleaned up
+LUKS_OPENED=0
+LUKS_MOUNTED=0
+SRC_MOUNTED=0
+
+# Ensure the variables used for log file descriptors are unused
+unset LOG_INFO
+unset LOG_ERR
+
+# Close LUKS and unmount if needed
+cleanup () {
+    if [ $SRC_MOUNTED -eq 1 ]; then
+        umount $SRC_SNAPSHOTS \
+            || die "Failed to unmount $SRC_SNAPSHOTS"
+        log "Unmounted $SRC_SNAPSHOTS"
+        sleep 0.1
+    fi
+
+    if [ $LUKS_MOUNTED -eq 1 ]; then
+        umount $DEST_SNAPSHOTS \
+            || die "Failed to unmount $DEST_SNAPSHOTS"
+        log "Unmounted $DEST_SNAPSHOTS"
+        sleep 0.1
+    fi
+
+    if [ $LUKS_OPENED -eq 1 ]; then
+        # cryptsetup(8) exit codes
+        CRYPT_SUCCESS=0
+        CRYPT_BUSY=5
+        crypt_status=0
+
+        # Attempt to close LUKS device. If busy, wait a bit and retry a few
+        # times. Error if all unsuccessful.
+        for i in {1..3}; do
+            log "Attempt $i to close $LUKS_NAME"
+            cryptsetup close $LUKS_NAME
+            crypt_status=$?
+
+            if [ $crypt_status -eq $CRYPT_BUSY ]; then
+                sleep 0.1
+            elif [ $crypt_status -eq $CRYPT_SUCCESS ]; then
+                log "Closed $LUKS_NAME"
+                break
+            else
+                die "Failed to close $LUKS_NAME"
+            fi
+        done
+
+        if [ $crypt_status -ne $CRYPT_SUCCESS ]; then
+            die "Failed to close $LUKS_NAME"
+        fi
+    fi
+}
+
+# Send message to syslog
+# arg1: message
+log () {
+    echo "$@"
+    echo "$@" >&$LOG_INFO
+}
+
+# Send error to syslog and abort
+# arg1: error message
+die () {
+    echo "$@" >&2
+    echo "$@" >&$LOG_ERR
+    exit 1
+}
+
+# Create file descriptors for syslog info and syslog err
+exec {LOG_INFO}> >(logger --id=$$ --priority daemon.info --tag ss_crypt_transfer)
+exec {LOG_ERR}> >(logger --id=$$ --priority daemon.err --tag ss_crypt_transfer)
+
+# Install exit handler
+trap cleanup EXIT
+
+# Only run as root
+if [ $(id -u) -ne 0 ]; then
+    die "Snapshots can only be transferred as root"
+fi
+
+# Only run if udev's symlink exists
+if [ ! -e $LUKS_DEVICE ]; then
+    die "$LUKS_DEVICE not found"
+fi
+
 # Open LUKS crypt and mount the filesystem inside
 cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME \
     || die "Failed to open $LUKS_DEVICE as $LUKS_NAME"
@@ -77,7 +112,7 @@ LUKS_OPENED=1
 mount $DEST_SNAPSHOTS \
     || die "Failed to mount $LUKS_NAME onto $DEST_SNAPSHOTS"
 log "Mounted $LUKS_NAME onto $DEST_SNAPSHOTS"
-LUKS_MOUTED=1
+LUKS_MOUNTED=1
 
 # Mount the snapshot source
 mount $SRC_SNAPSHOTS \
@@ -85,8 +120,7 @@ mount $SRC_SNAPSHOTS \
 log "Mounted $SRC_SNAPSHOTS"
 SRC_MOUNTED=1
 
-exit
-
+log "oldest: $OLDEST"
 # Loop through the keys of the $SUBVOLUMES map
 for target in ${!SUBVOLUMES[@]}; do
     target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
@@ -95,6 +129,16 @@ for target in ${!SUBVOLUMES[@]}; do
     # Get the list of snapshots
     list_src=($(ls $target_src))
     list_dest=($(ls $target_dest))
+
+    # Print snapshots destined for transfer
+    log "'$target' snapshots to move:"
+    for ss in "${list_src[@]}"; do
+        if [[ "$ss" < "$OLDEST" ]]; then
+            log "$ss"
+        fi
+    done
+
+    continue
 
     # If no snapshots exist, make one
 #    if [ ${#list_src[@]} -eq 0 ]; then
