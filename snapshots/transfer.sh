@@ -29,12 +29,34 @@ SRC_MOUNTED=0
 CRYPT_SUCCESS=0
 CRYPT_EXISTS_BUSY=5
 
+# Reset getopts index
+OPTIND=1
+
+# Flag to control sending/deleting
+# Set by -p
+PRETEND=0
+
 # Ensure the variables used for log file descriptors are unused
 unset LOG_INFO
 unset LOG_ERR
 
 # Ensure the variable used to hold exit codes is unused
 unset STATUS
+
+# Print usage information
+# -h or invalid argument
+usage () {
+    echo "Usage: $0 [args]"
+    echo "NOTE: requires root permissions to run"
+    echo ""
+    echo "Args:"
+    echo "    -h    help"
+    echo "          Display this help."
+    echo "    -p    pretend"
+    echo "          Does everything except for transferring/deleting snapshots."
+    echo "          Doesn't write to syslog."
+    exit 1
+}
 
 # Close LUKS and unmount if needed
 # Only close/unmount the ones opened/mounted by the script
@@ -81,20 +103,40 @@ cleanup () {
     fi
 }
 
-# Send message to syslog
+# Send message to syslog (except in pretend mode)
 # arg1: message
 log () {
     echo "$*"
-    echo "$*" >&$LOG_INFO
+    if [ "$PRETEND" -eq 0 ]; then
+        echo "$*" >&$LOG_INFO
+    fi
 }
 
-# Send error to syslog and abort
+# Send error to syslog (except in pretend mode) and abort
 # arg1: error message
 die () {
     echo "!!! $*" >&2
-    echo "!!! $*" >&$LOG_ERR
+    if [ "$PRETEND" -eq 0 ]; then
+        echo "!!! $*" >&$LOG_ERR
+    fi
     exit 1
 }
+
+# Parse commandline args
+while getopts ':hp' args; do
+    case "$args" in
+    h)
+        usage
+        ;;
+    p)
+        PRETEND=1
+        ;;
+    *)
+        echo "Invalid argument: -$OPTARG"
+        usage
+        ;;
+    esac
+done
 
 # Create file descriptors for syslog info and syslog err
 exec {LOG_INFO}> >(logger --id=$$ --priority daemon.info --tag ss_crypt_transfer)
@@ -181,27 +223,33 @@ for target in "${!SUBVOLUMES[@]}"; do
             # Used when first sending snapshots to a new drive
             elif [ -z "$base" ]; then
                 log ">>> Sending $ss with no base snapshot"
-#                if ! (btrfs send $target_src/$ss | btrfs receive $target_dest); then
-#                    die "Error sending subvolume '$target_src/$ss'"
-#                fi
-#
-#                sync
+                if [ "$PRETEND" -eq 0 ]; then
+                    if ! (btrfs send "$target_src/$ss" | btrfs receive "$target_dest"); then
+                        die "Error sending subvolume '$target_src/$ss'"
+                    fi
+
+                    sync
+                fi
             # Normal case
             # Newest on destination is used as the base, sends second oldest on source
             else
                 log ">>> Sending $ss using $base as the base"
-#                if ! (btrfs send -p $target/$base $target_src/$ss | btrfs receive $target_dest); then
-#                    die "Error sending subvolume '$target_src/$ss', base '$target_src/$base'"
-#                fi
+                if [ "$PRETEND" -eq 0 ]; then
+                    if ! (btrfs send -p "$target/$base" "$target_src/$ss" | btrfs receive "$target_dest"); then
+                        die "Error sending subvolume '$target_src/$ss', base '$target_src/$base'"
+                    fi
+                fi
 
                 # Deleting only the base snapshot preserves the most recent
                 # moved snapshot to use as a base in the future
                 log "--- Deleting $base from source"
-#                if ! (btrfs subvolume delete $target_src/$base); then
-#                    die "Error deleting $base from source"
-#                fi
-#
-#                sync
+                if [ "$PRETEND" -eq 0 ]; then
+                    if ! (btrfs subvolume delete "$target_src/$base"); then
+                        die "Error deleting $base from source"
+                    fi
+
+                    sync
+                fi
             fi
 
             # Update base
