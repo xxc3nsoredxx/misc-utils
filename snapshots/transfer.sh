@@ -22,12 +22,19 @@ EXPIRED=$(date -I --date='5 weeks ago')
 LUKS_OPENED=0
 LUKS_MOUNTED=0
 SRC_MOUNTED=0
+# cryptsetup(8) exit codes
+CRYPT_SUCCESS=0
+CRYPT_EXISTS_BUSY=5
 
 # Ensure the variables used for log file descriptors are unused
 unset LOG_INFO
 unset LOG_ERR
 
+# Ensure the variable used to hold exit codes is unused
+unset STATUS
+
 # Close LUKS and unmount if needed
+# Only close/unmount the ones opened/mounted by the script
 cleanup () {
     if [ $SRC_MOUNTED -eq 1 ]; then
         umount $SRC_SNAPSHOTS \
@@ -44,21 +51,16 @@ cleanup () {
     fi
 
     if [ $LUKS_OPENED -eq 1 ]; then
-        # cryptsetup(8) exit codes
-        CRYPT_SUCCESS=0
-        CRYPT_BUSY=5
-        crypt_status=0
-
         # Attempt to close LUKS device. If busy, wait a bit and retry a few
         # times. Error if all unsuccessful.
         for i in {1..3}; do
             log "Attempt $i to close $LUKS_NAME"
             cryptsetup close $LUKS_NAME
-            crypt_status=$?
+            STATUS=$?
 
-            if [ $crypt_status -eq $CRYPT_BUSY ]; then
+            if [ $STATUS -eq $CRYPT_EXISTS_BUSY ]; then
                 sleep 0.1
-            elif [ $crypt_status -eq $CRYPT_SUCCESS ]; then
+            elif [ $STATUS -eq $CRYPT_SUCCESS ]; then
                 log "Closed $LUKS_NAME"
                 break
             else
@@ -66,7 +68,7 @@ cleanup () {
             fi
         done
 
-        if [ $crypt_status -ne $CRYPT_SUCCESS ]; then
+        if [ $STATUS -ne $CRYPT_SUCCESS ]; then
             die "Failed to close $LUKS_NAME"
         fi
     fi
@@ -104,23 +106,41 @@ if [ ! -e $LUKS_DEVICE ]; then
     die "$LUKS_DEVICE not found"
 fi
 
-# TODO: handle already mounted/opened
+# Open LUKS crypt
+cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME
+STATUS=$?
+if [ $STATUS -eq $CRYPT_SUCCESS ]; then
+    log "Opened $LUKS_DEVICE as $LUKS_NAME"
+    LUKS_OPENED=1
+elif [ $STATUS -eq $CRYPT_EXISTS_BUSY ]; then
+    log "$LUKS_NAME already opened"
+else
+    die "Failed to open $LUKS_DEVICE as $LUKS_NAME"
+fi
 
-# Open LUKS crypt and mount the filesystem inside
-cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME \
-    || die "Failed to open $LUKS_DEVICE as $LUKS_NAME"
-log "Opened $LUKS_DEVICE as $LUKS_NAME"
-LUKS_OPENED=1
-mount $DEST_SNAPSHOTS \
-    || die "Failed to mount $LUKS_NAME onto $DEST_SNAPSHOTS"
-log "Mounted $LUKS_NAME onto $DEST_SNAPSHOTS"
-LUKS_MOUNTED=1
+# Mount the filesystem in the crypt
+if ! (findmnt $DEST_SNAPSHOTS &> /dev/null); then
+    if (mount $DEST_SNAPSHOTS &> /dev/null); then
+        log "Mounted $LUKS_NAME onto $DEST_SNAPSHOTS"
+        LUKS_MOUNTED=1
+    else
+        die "Failed to mount $LUKS_NAME onto $DEST_SNAPSHOTS"
+    fi
+else
+    log "$DEST_SNAPSHOTS already mounted"
+fi
 
 # Mount the snapshot source
-mount $SRC_SNAPSHOTS \
-    || die "Failed to mount $SRC_SNAPSHOTS"
-log "Mounted $SRC_SNAPSHOTS"
-SRC_MOUNTED=1
+if ! (findmnt $SRC_SNAPSHOTS &> /dev/null); then
+    if (mount $SRC_SNAPSHOTS &> /dev/null); then
+        log "Mounted $SRC_SNAPSHOTS"
+        SRC_MOUNTED=1
+    else
+        die "Failed to mount $SRC_SNAPSHOTS"
+    fi
+else
+    log "$SRC_SNAPSHOTS already mounted"
+fi
 
 log "Transfer cutoff: $OLDEST"
 # Loop through the keys of the $SUBVOLUMES map
