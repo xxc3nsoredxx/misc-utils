@@ -1,6 +1,9 @@
 #! /bin/bash
 
 
+# Ensure the return value of a pipeline is 0 only if all commands in it succeed
+set -o pipefail
+
 declare -A SUBVOLUMES
 SRC_SNAPSHOTS=/root/sd_snapshots
 DEST_SNAPSHOTS=/root/snapshot_crypt/mnt
@@ -37,15 +40,19 @@ unset STATUS
 # Only close/unmount the ones opened/mounted by the script
 cleanup () {
     if [ $SRC_MOUNTED -eq 1 ]; then
-        umount $SRC_SNAPSHOTS \
-            || die "Failed to unmount $SRC_SNAPSHOTS"
+        if ! (umount $SRC_SNAPSHOTS); then
+            die "Failed to unmount $SRC_SNAPSHOTS"
+        fi
+
         log "Unmounted $SRC_SNAPSHOTS"
         sleep 0.1
     fi
 
     if [ $LUKS_MOUNTED -eq 1 ]; then
-        umount $DEST_SNAPSHOTS \
-            || die "Failed to unmount $DEST_SNAPSHOTS"
+        if ! (umount $DEST_SNAPSHOTS); then
+            die "Failed to unmount $DEST_SNAPSHOTS"
+        fi
+
         log "Unmounted $DEST_SNAPSHOTS"
         sleep 0.1
     fi
@@ -77,15 +84,15 @@ cleanup () {
 # Send message to syslog
 # arg1: message
 log () {
-    echo "$@"
-    echo "$@" >&$LOG_INFO
+    echo "$*"
+    echo "$*" >&$LOG_INFO
 }
 
 # Send error to syslog and abort
 # arg1: error message
 die () {
-    echo "$@" >&2
-    echo "$@" >&$LOG_ERR
+    echo "!!! $*" >&2
+    echo "!!! $*" >&$LOG_ERR
     exit 1
 }
 
@@ -97,8 +104,8 @@ exec {LOG_ERR}> >(logger --id=$$ --priority daemon.err --tag ss_crypt_transfer)
 trap cleanup EXIT
 
 # Only run as root
-if [ $(id -u) -ne 0 ]; then
-    die "Snapshots can only be transferred as root"
+if [ "$(id -u)" -ne 0 ]; then
+    die "Snapshots can only be transferred as root ($(id -un), id=$(id -u))"
 fi
 
 # Only run if udev's symlink exists
@@ -144,48 +151,61 @@ fi
 
 log "Transfer cutoff: $OLDEST"
 # Loop through the keys of the $SUBVOLUMES map
-for target in ${!SUBVOLUMES[@]}; do
-    log "'$target' snapshots:"
+for target in "${!SUBVOLUMES[@]}"; do
+    log "$target:"
 
     target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
     target_dest=$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}
 
     # Get the list of snapshots
-    list_src=($(ls $target_src))
-    list_dest=($(ls $target_dest))
+    mapfile -t list_src < <(ls "$target_src")
+    mapfile -t list_dest < <(ls "$target_dest")
 
     # Get the most recent snapshot on the destination drive to use as a base
-    dest_prev=''
+    base=''
     if [ ${#list_dest} -eq 0 ]; then
         log "No '$target' snapshots on $LUKS_NAME"
     else
-        dest_prev=${list_dest[-1]}
-        log "Most recent '$target' snapshot on $LUKS_NAME: $dest_prev"
+        base=${list_dest[-1]}
+        log "Most recent '$target' snapshot on $LUKS_NAME: $base"
     fi
 
     # Transfer snapshots
-    # TODO: check status of btrfs send | btrfs receive for errors
     for ss in "${list_src[@]}"; do
         if [[ "$ss" < "$OLDEST" ]]; then
-            # Handle no previous snapshot case
-            if [ -z $dest_prev ]; then
-                log "Sending $ss with no base snapshot"
-            # Handle snapshot already exists
-            # Newest on destination, oldest on source
+            # Handle newest on destination == oldest on source
             # Used to set the base when not starting from a blank slate
-            elif [ "$ss" == "$dest_prev" ]; then
+            if [ "$ss" == "$base" ]; then
                 log "$ss already exists on $LUKS_NAME, skipped"
+            # Handle no previous snapshot case
+            # Used when first sending snapshots to a new drive
+            elif [ -z "$base" ]; then
+                log ">>> Sending $ss with no base snapshot"
+#                if ! (btrfs send $target_src/$ss | btrfs receive $target_dest); then
+#                    die "Error sending subvolume '$target_src/$ss'"
+#                fi
+#
+#                sync
+            # Normal case
+            # Newest on destination is used as the base, sends second oldest on source
             else
-                log "Sending $ss using $dest_prev as the base"
+                log ">>> Sending $ss using $base as the base"
+#                if ! (btrfs send -p $target/$base $target_src/$ss | btrfs receive $target_dest); then
+#                    die "Error sending subvolume '$target_src/$ss', base '$target_src/$base'"
+#                fi
 
                 # Deleting only the base snapshot preserves the most recent
                 # moved snapshot to use as a base in the future
-                # TODO: delete the base snapshot from the source
-                log "Deleting $dest_prev from source"
+                log "--- Deleting $base from source"
+#                if ! (btrfs subvolume delete $target_src/$base); then
+#                    die "Error deleting $base from source"
+#                fi
+#
+#                sync
             fi
 
             # Update base
-            dest_prev=$ss
+            base=$ss
         fi
     done
 
