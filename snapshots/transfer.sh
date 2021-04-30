@@ -1,33 +1,14 @@
 #! /bin/bash
 
-
 # Ensure the return value of a pipeline is 0 only if all commands in it succeed
 set -o pipefail
 
+# Pre-declare config file variables
+# Declare SUBVOLUMES to be an associative array (ie, map)
 declare -A SUBVOLUMES
-SRC_SNAPSHOTS=/root/sd_snapshots
-DEST_SNAPSHOTS=/root/snapshot_crypt/mnt
-LUKS_KEYFILE=/root/snapshot_crypt/ss_crypt.keyfile.txt
-# udev creates a symlink /dev/ss_crypt pointing to the partition
-LUKS_DEVICE=/dev/ss_crypt
-LUKS_NAME=ss_crypt
-SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
 
-# Oldest snapshot to keep on sd card
-OLDEST=$(date -I --date='3 months ago')
-
-# TODO: delete these
-NAME=$(date -I)
-DESIRED_PREV=$(date -I --date='last saturday')
-EXPIRED=$(date -I --date='5 weeks ago')
-
-# Flags to control what is cleaned up
-LUKS_OPENED=0
-LUKS_MOUNTED=0
-SRC_MOUNTED=0
-# cryptsetup(8) exit codes
-CRYPT_SUCCESS=0
-CRYPT_EXISTS_BUSY=5
+# Import config file
+. transfer.conf
 
 # Reset getopts index
 OPTIND=1
@@ -36,12 +17,30 @@ OPTIND=1
 # Set by -p
 PRETEND=0
 
-# Ensure the variables used for log file descriptors are unused
-unset LOG_INFO
-unset LOG_ERR
+# Set defaults for log file descriptors (stdout, stderr)
+LOG_INFO=1
+LOG_ERR=2
 
-# Ensure the variable used to hold exit codes is unused
-unset STATUS
+# Oldest snapshot to keep on source
+OLDEST=$(date -I --date="$OLDEST_CUTOFF")
+
+# Ensure the variable used to hold exit codes is unused/reset
+STATUS=0
+
+# Save the IFS value so it can be restored when needed
+OLD_IFS="$IFS"
+
+# udev creates a symlink /dev/ss_crypt pointing to the partition
+LUKS_DEVICE='/dev/ss_crypt'
+LUKS_NAME='ss_crypt'
+
+# Flags to control what is cleaned up
+LUKS_OPENED=0
+LUKS_MOUNTED=0
+SRC_MOUNTED=0
+# cryptsetup(8) exit codes
+CRYPT_SUCCESS=0
+CRYPT_EXISTS_BUSY=5
 
 # Print usage information
 # -h or invalid argument
@@ -62,7 +61,7 @@ usage () {
 # Only close/unmount the ones opened/mounted by the script
 cleanup () {
     if [ $SRC_MOUNTED -eq 1 ]; then
-        if ! (umount $SRC_SNAPSHOTS); then
+        if ! (umount "$SRC_SNAPSHOTS"); then
             die "Failed to unmount $SRC_SNAPSHOTS"
         fi
 
@@ -71,7 +70,7 @@ cleanup () {
     fi
 
     if [ $LUKS_MOUNTED -eq 1 ]; then
-        if ! (umount $DEST_SNAPSHOTS); then
+        if ! (umount "$DEST_SNAPSHOTS"); then
             die "Failed to unmount $DEST_SNAPSHOTS"
         fi
 
@@ -150,13 +149,31 @@ if [ "$(id -u)" -ne 0 ]; then
     die "Snapshots can only be transferred as root ($(id -un), id=$(id -u))"
 fi
 
-# Only run if udev's symlink exists
+# Check that the source and destination mountpoints exist
+if [ ! -d "$SRC_SNAPSHOTS" ]; then
+    die "Mountpoint '$SRC_SNAPSHOTS' not found"
+fi
+if [ ! -d "$DEST_SNAPSHOTS" ]; then
+    die "Mountpoint '$DEST_SNAPSHOTS' not found"
+fi
+
+# Check that LUKS key-file exists
+if [ ! -f "$LUKS_KEYFILE" ]; then
+    die "Key-file '$LUKS_KEYFILE' not found"
+fi
+
+# Check that a valid date was acquired
+if [ -z "$OLDEST" ]; then
+    die "Invalid date string '$OLDEST_CUTOFF'"
+fi
+
+# Check that udev's symlink exists
 if [ ! -e $LUKS_DEVICE ]; then
     die "$LUKS_DEVICE not found"
 fi
 
 # Open LUKS crypt
-cryptsetup --key-file $LUKS_KEYFILE open --type luks $LUKS_DEVICE $LUKS_NAME
+cryptsetup --key-file "$LUKS_KEYFILE" open --type luks $LUKS_DEVICE $LUKS_NAME
 STATUS=$?
 if [ $STATUS -eq $CRYPT_SUCCESS ]; then
     log "Opened $LUKS_DEVICE as $LUKS_NAME"
@@ -168,11 +185,15 @@ else
 fi
 
 # Mount the filesystem in the crypt
-if ! (findmnt $DEST_SNAPSHOTS &> /dev/null); then
-    if (mount $DEST_SNAPSHOTS &> /dev/null); then
+if ! (findmnt "$DEST_SNAPSHOTS" &> /dev/null); then
+    # Set IFS to create a comma separated list as required by mount(8)
+    IFS=','
+    if (mount "/dev/mapper/$LUKS_NAME" "$DEST_SNAPSHOTS" -o "${DEST_MOUNT_OPTS[*]}" &> /dev/null); then
+        IFS="$OLD_IFS"
         log "Mounted $LUKS_NAME onto $DEST_SNAPSHOTS"
         LUKS_MOUNTED=1
     else
+        IFS="$OLD_IFS"
         die "Failed to mount $LUKS_NAME onto $DEST_SNAPSHOTS"
     fi
 else
@@ -180,11 +201,15 @@ else
 fi
 
 # Mount the snapshot source
-if ! (findmnt $SRC_SNAPSHOTS &> /dev/null); then
-    if (mount $SRC_SNAPSHOTS &> /dev/null); then
+if ! (findmnt "$SRC_SNAPSHOTS" &> /dev/null); then
+    # Set IFS to create a comma separated list as required by mount(8)
+    IFS=','
+    if (mount "$SRC_SNAPSHOTS_DEV" "$SRC_SNAPSHOTS" -o "${SRC_MOUNT_OPTS[*]}" &> /dev/null); then
+        IFS="$OLD_IFS"
         log "Mounted $SRC_SNAPSHOTS"
         SRC_MOUNTED=1
     else
+        IFS="$OLD_IFS"
         die "Failed to mount $SRC_SNAPSHOTS"
     fi
 else
@@ -235,7 +260,7 @@ for target in "${!SUBVOLUMES[@]}"; do
             else
                 log ">>> Sending $ss using $base as the base"
                 if [ "$PRETEND" -eq 0 ]; then
-                    if ! (btrfs send -p "$target/$base" "$target_src/$ss" | btrfs receive "$target_dest"); then
+                    if ! (btrfs send -p "$target_src/$base" "$target_src/$ss" | btrfs receive "$target_dest"); then
                         die "Error sending subvolume '$target_src/$ss', base '$target_src/$base'"
                     fi
                 fi
@@ -256,58 +281,4 @@ for target in "${!SUBVOLUMES[@]}"; do
             base=$ss
         fi
     done
-
-    continue
-
-    # If no snapshots exist, make one
-#    if [ ${#list_src[@]} -eq 0 ]; then
-#        echo "No existing snapshots found for $target"
-#        btrfs subvolume snapshot -r $target $target_src/$NAME
-#        sync
-#        btrfs send $target_src/$NAME | btrfs receive $target_dest
-#        sync
-#        continue
-#    fi
-
-    src_prev=${list_src[-1]}
-
-    # Check if most recent src snapshot is up to date
-#    if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
-#        echo "SRC snapshot '$target_src/$src_prev' is out of date"
-#
-#        btrfs subvolume snapshot -r $target $target_src/$NAME
-#        sync
-#        list_src=(${list_src[@]} $NAME)
-#        src_prev=$NAME
-#    fi
-
-    # Check if most recent dest snapshot is up to date
-    dest_prev=${list_dest[-1]}
-
-#    if [[ "$dest_prev" < "$src_prev" ]]; then
-#        echo "DEST snapshot '$target_dest/$dest_prev' is out of date"
-#
-#        # Determine if incremental send is used
-#        if [ ${#list_src[@]} -ge 2 ]; then
-#            echo "Previous snapshot of $target is at $target_src/${list_src[-2]}"
-#            btrfs send -p $target_src/${list_src[-2]} $target_src/${list_src[-1]} | btrfs receive $target_dest
-#            sync
-#        else
-#            echo "No previous snapshot to use as base"
-#            btrfs send $target_src/${list_src[-1]} | btrfs receive $target_dest
-#            sync
-#        fi
-#        echo "Sending $target_src/${list_src[-1]} complete"
-#
-#        # Check for expired src snapshots
-#        # Only delete if there are > 2 snapshots so that incremental send works
-#        if [ ${#list_src[@]} -gt 2 ]; then
-#            if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
-#                echo "Expired snapshot '$target_src/${list_src[0]}'"
-#                btrfs subvolume delete $target_src/${list_src[0]}
-#            fi
-#        else
-#            echo "Not enough snapshots in '$target_src' to expire"
-#        fi
-#    fi
 done

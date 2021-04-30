@@ -1,0 +1,3 @@
+# Detect when snapshot storage drive is plugged in or changed
+# Creates /dev/ss_crypt symlink used by the snapshot transfer script
+ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="SS_CRYPT", SYMLINK="ss_crypt"
