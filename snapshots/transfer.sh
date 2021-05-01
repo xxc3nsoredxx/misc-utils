@@ -1,5 +1,22 @@
 #! /bin/bash
 
+#   Transfers BTRFS snapshots across drives
+#   Copyright (C) 2021  xxc3nsoredxx
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 # Ensure the return value of a pipeline is 0 only if all commands in it succeed
 set -o pipefail
 
@@ -51,6 +68,8 @@ usage () {
     echo "Args:"
     echo "    -h    help"
     echo "          Display this help."
+    echo "    -l    license"
+    echo "          Display license info."
     echo "    -p    pretend"
     echo "          Does everything except for transferring/deleting snapshots."
     echo "          Doesn't write to syslog."
@@ -122,10 +141,14 @@ die () {
 }
 
 # Parse commandline args
-while getopts ':hp' args; do
+while getopts ':hlp' args; do
     case "$args" in
     h)
         usage
+        ;;
+    l)
+        sed -nEe '3,+14 {s/^# *//; p}' $0
+        exit 1
         ;;
     p)
         PRETEND=1
