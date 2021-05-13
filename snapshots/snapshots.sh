@@ -1,7 +1,7 @@
 #! /bin/bash
 
 #   BTRFS snapshot automation script
-#   Copyright (C) 2020  xxc3nsoredxx
+#   Copyright (C) 2020-2021  xxc3nsoredxx
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -17,19 +17,75 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+# Ensure the return value of a pipeline is 0 only if all commands in it succeed
+set -o pipefail
+
+# Pre-declare config file variables
+# Declare SUBVOLUMES to be an associative array (ie, map)
+declare -A SUBVOLUMES
+
+# Import config file
+. snapshots.conf
+
+NAME=$(date -I)
+DESIRED_PREV=$(date -I --date="$DESIRED_PREV_CUTOFF")
+EXPIRED=$(date -I --date="$EXPIRED_CUTOFF")
+
+# Flags to control what is cleaned up
+SRC_MOUNTED=0
+DEST_MOUNTED=0
+
+# Only unmount the ones mounted by the script
+cleanup () {
+    if [ $SRC_MOUNTED -eq 1 ]; then
+        if ! (umount "$SRC_SNAPSHOTS"); then
+            die "Failed to unmount $SRC_SNAPSHOTS"
+        fi
+
+        echo "Unmounted $SRC_SNAPSHOTS"
+        sleep 0.1
+    fi
+
+    if [ $DEST_MOUNTED -eq 1 ]; then
+        if ! (umount "$DEST_SNAPSHOTS"); then
+            die "Failed to unmount $DEST_SNAPSHOTS"
+        fi
+
+        echo "Unmounted $DEST_SNAPSHOTS"
+        sleep 0.1
+    fi
+}
+
+# Output error and abort
+# arg1: error message
+die () {
+    echo "!!! $*" >&2
+    exit 1
+}
+
+# Install exit handler
+trap cleanup EXIT
+
 # Only run as root
-if [ $(id -u) -ne 0 ]; then
-    echo "Snapshots must be created as root"
-    exit -1
+if [ "$(id -u)" -ne 0 ]; then
+    die "Snapshots must be created as root"
 fi
 
-declare -A SUBVOLUMES
-SRC_SNAPSHOTS=/root/btrfs_snapshots
-DEST_SNAPSHOTS=/root/sd_snapshots
-SUBVOLUMES=(['/']='root' ['/root']='root_home' ['/home']='home')
-NAME=$(date -I)
-DESIRED_PREV=$(date -I --date='last saturday')
-EXPIRED=$(date -I --date='5 weeks ago')
+# Check that the source and destination mountpoints exist
+if [ ! -d "$SRC_SNAPSHOTS" ]; then
+    die "Mountpoint '$SRC_SNAPSHOTS' not found"
+fi
+if [ ! -d "$DEST_SNAPSHOTS" ]; then
+    die "Mountpoint '$DEST_SNAPSHOTS' not found"
+fi
+
+# Check that valid dates were acquired
+if [ -z "$DESIRED_PREV" ]; then
+    die "Invalid date string '$DESIRED_PREV_CUTOFF'"
+fi
+if [ -z "$EXPIRED" ]; then
+    die "Invalid date string '$EXPIRED_CUTOFF'"
+fi
 
 mount $SRC_SNAPSHOTS
 mount $DEST_SNAPSHOTS
