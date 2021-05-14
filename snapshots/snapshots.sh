@@ -27,9 +27,9 @@ declare -A SUBVOLUMES
 # Import config file
 . snapshots.conf
 
-NAME=$(date -I)
-DESIRED_PREV=$(date -I --date="$DESIRED_PREV_CUTOFF")
-EXPIRED=$(date -I --date="$EXPIRED_CUTOFF")
+NAME="$(date -I)"
+DESIRED_PREV="$(date -I --date="$DESIRED_PREV_CUTOFF")"
+EXPIRED="$(date -I --date="$EXPIRED_CUTOFF")"
 
 # Flags to control what is cleaned up
 SRC_MOUNTED=0
@@ -59,7 +59,7 @@ cleanup () {
 # Output error and abort
 # arg1: error message
 die () {
-    echo "!!! $*" >&2
+    echo "!!! $*"
     exit 1
 }
 
@@ -87,23 +87,52 @@ if [ -z "$EXPIRED" ]; then
     die "Invalid date string '$EXPIRED_CUTOFF'"
 fi
 
-mount $SRC_SNAPSHOTS
-mount $DEST_SNAPSHOTS
+# Mount the snapshot source
+if ! (findmnt "$SRC_SNAPSHOTS" &> /dev/null); then
+    # Set IFS to create a comma separated list as required by mount(8)
+    IFS=','
+    if (mount "$SRC_SNAPSHOTS_DEV" "$SRC_SNAPSHOTS" -o "${SRC_MOUNT_OPTS[*]}" &> /dev/null); then
+        IFS="$OLD_IFS"
+        echo "Mounted $SRC_SNAPSHOTS"
+        SRC_MOUNTED=1
+    else
+        IFS="$OLD_IFS"
+        die "Failed to mount $SRC_SNAPSHOTS"
+    fi
+else
+    echo "$SRC_SNAPSHOTS already mounted"
+fi
 
-for target in ${!SUBVOLUMES[@]}; do
-    target_src=$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}
-    target_dest=$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}
+# Mount the snapshot destination
+if ! (findmnt "$DEST_SNAPSHOTS" &> /dev/null); then
+    # Set IFS to create a comma separated list as required by mount(8)
+    IFS=','
+    if (mount "$DEST_SNAPSHOTS_DEV" "$DEST_SNAPSHOTS" -o "${DEST_MOUNT_OPTS[*]}" &> /dev/null); then
+        IFS="$OLD_IFS"
+        echo "Mounted $DEST_SNAPSHOTS"
+        DEST_MOUNTED=1
+    else
+        IFS="$OLD_IFS"
+        die "Failed to mount $DEST_SNAPSHOTS"
+    fi
+else
+    echo "$DEST_SNAPSHOTS already mounted"
+fi
+
+for target in "${!SUBVOLUMES[@]}"; do
+    target_src="$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}"
+    target_dest="$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}"
 
     # Get the list of snapshots
-    list_src=($(ls $target_src))
-    list_dest=($(ls $target_dest))
+    mapfile -t list_src < <(ls "$target_src")
+    mapfile -t list_dest < <(ls "$target_dest")
 
     # If no snapshots exist, make one
     if [ ${#list_src[@]} -eq 0 ]; then
         echo "No existing snapshots found for $target"
-        btrfs subvolume snapshot -r $target $target_src/$NAME
+        btrfs subvolume snapshot -r "$target" "$target_src/$NAME"
         sync
-        btrfs send $target_src/$NAME | btrfs receive $target_dest
+        btrfs send "$target_src/$NAME" | btrfs receive "$target_dest"
         sync
         continue
     fi
@@ -114,9 +143,9 @@ for target in ${!SUBVOLUMES[@]}; do
     if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
         echo "SRC snapshot '$target_src/$src_prev' is out of date"
 
-        btrfs subvolume snapshot -r $target $target_src/$NAME
+        btrfs subvolume snapshot -r "$target" "$target_src/$NAME"
         sync
-        list_src=(${list_src[@]} $NAME)
+        list_src=("${list_src[@]}" "$NAME")
         src_prev=$NAME
     fi
 
@@ -129,11 +158,11 @@ for target in ${!SUBVOLUMES[@]}; do
         # Determine if incremental send is used
         if [ ${#list_src[@]} -ge 2 ]; then
             echo "Previous snapshot of $target is at $target_src/${list_src[-2]}"
-            btrfs send -p $target_src/${list_src[-2]} $target_src/${list_src[-1]} | btrfs receive $target_dest
+            btrfs send -p "$target_src/${list_src[-2]}" "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"
             sync
         else
             echo "No previous snapshot to use as base"
-            btrfs send $target_src/${list_src[-1]} | btrfs receive $target_dest
+            btrfs send "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"
             sync
         fi
         echo "Sending $target_src/${list_src[-1]} complete"
@@ -143,13 +172,10 @@ for target in ${!SUBVOLUMES[@]}; do
         if [ ${#list_src[@]} -gt 2 ]; then
             if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
                 echo "Expired snapshot '$target_src/${list_src[0]}'"
-                btrfs subvolume delete $target_src/${list_src[0]}
+                btrfs subvolume delete "$target_src/${list_src[0]}"
             fi
         else
             echo "Not enough snapshots in '$target_src' to expire"
         fi
     fi
 done
-
-umount $DEST_SNAPSHOTS
-umount $SRC_SNAPSHOTS
