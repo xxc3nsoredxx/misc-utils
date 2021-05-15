@@ -1,6 +1,6 @@
 #! /bin/bash
 
-#   BTRFS snapshot automation script
+#   BTRFS snapshot management script
 #   Copyright (C) 2020-2021  xxc3nsoredxx
 #
 #   This program is free software: you can redistribute it and/or modify
@@ -16,33 +16,114 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# TODO: flag to determine if run by cron
+# TODO: flag for taking snapshots
+# TODO: flag for transfering snapshots
+
 
 # Ensure the return value of a pipeline is 0 only if all commands in it succeed
 set -o pipefail
 
 # Pre-declare config file variables
-# Declare SUBVOLUMES to be an associative array (ie, map)
+# Declare *_SUBVOLUMES to be an associative array (ie, map)
+declare -A TAKE_SUBVOLUMES
+declare -A XFER_SUBVOLUMES
+# Assigned once a mode is chosen
 declare -A SUBVOLUMES
 
 # Import config file
 . snapshots.conf
 
-NAME="$(date -I)"
-DESIRED_PREV="$(date -I --date="$DESIRED_PREV_CUTOFF")"
-EXPIRED="$(date -I --date="$EXPIRED_CUTOFF")"
-
+################################################################################
+# Common variables
+################################################################################
+# Reset getopts index
+OPTIND=1
+# Set by -p
+PRETEND=0
+# Set by -s
+TAKE_MODE=0
+# Set defaults for log file descriptors (stdout, stderr)
+LOG_INFO=1
+LOG_ERR=2
+# Ensure the variable used to hold exit codes is unused/reset
+STATUS=0
+# Save the IFS value so it can be restored when needed
+OLD_IFS="$IFS"
 # Flags to control what is cleaned up
 SRC_MOUNTED=0
 DEST_MOUNTED=0
 
-# Only unmount the ones mounted by the script
+################################################################################
+# Variables related to taking snapshots
+################################################################################
+# Name of the current snapshot (if one will be taken)
+NAME="$(date -I)"
+DESIRED_PREV="$(date -I --date="$TAKE_DESIRED_PREV_CUTOFF")"
+EXPIRED="$(date -I --date="$TAKE_EXPIRED_CUTOFF")"
+
+################################################################################
+# Variables related to transfering snapshots
+################################################################################
+# Oldest snapshot to keep on source
+OLDEST=$(date -I --date="$XFER_OLDEST_CUTOFF")
+# udev creates a symlink /dev/ss_crypt pointing to the partition
+LUKS_DEVICE='/dev/ss_crypt'
+LUKS_NAME='ss_crypt'
+# Flags to control what is cleaned up
+LUKS_OPENED=0
+LUKS_MOUNTED=0
+# cryptsetup(8) exit codes
+CRYPT_SUCCESS=0
+CRYPT_EXISTS_BUSY=5
+
+# Print usage information
+# -h or invalid argument
+usage () {
+    echo "Usage: $0 [args]"
+    echo "NOTE: requires root permissions to run"
+    echo "NOTE: modes are mutually exclusive"
+    echo ""
+    echo "Args:"
+    echo "    -h    help"
+    echo "          Display this help."
+    echo "    -l    license"
+    echo "          Display license info."
+    echo "    -p    pretend"
+    echo "          Does everything except for touching snapshots."
+    echo "          Doesn't write to syslog."
+    echo "    -s    snapshot mode"
+    echo "          Take snapshots"
+    exit 1
+}
+
+# Send message to syslog (except in pretend mode and run by cron)
+# arg1: message
+log () {
+    echo "$*"
+    if [ "$PRETEND" -eq 0 ]; then
+        echo "$*" >&$LOG_INFO
+    fi
+}
+
+# Send error to syslog (except in pretend mode and run by cron) and abort
+# arg1: error message
+die () {
+    echo "!!! $*" >&2
+    if [ "$PRETEND" -eq 0 ]; then
+        echo "!!! $*" >&$LOG_ERR
+    fi
+    exit 1
+}
+
+# Only close/unmount any drives opened/mounted by the script
 cleanup () {
     if [ $SRC_MOUNTED -eq 1 ]; then
         if ! (umount "$SRC_SNAPSHOTS"); then
             die "Failed to unmount $SRC_SNAPSHOTS"
         fi
 
-        echo "Unmounted $SRC_SNAPSHOTS"
+        log "Unmounted $SRC_SNAPSHOTS"
         sleep 0.1
     fi
 
@@ -51,24 +132,73 @@ cleanup () {
             die "Failed to unmount $DEST_SNAPSHOTS"
         fi
 
-        echo "Unmounted $DEST_SNAPSHOTS"
+        log "Unmounted $DEST_SNAPSHOTS"
         sleep 0.1
+    fi
+
+    if [ $LUKS_OPENED -eq 1 ]; then
+        # Attempt to close LUKS device. If busy, wait a bit and retry a few
+        # times. Error if all unsuccessful.
+        for i in {1..3}; do
+            log "Attempt $i to close $LUKS_NAME"
+            cryptsetup close $LUKS_NAME
+            STATUS=$?
+
+            if [ $STATUS -eq $CRYPT_EXISTS_BUSY ]; then
+                sleep 0.1
+            elif [ $STATUS -eq $CRYPT_SUCCESS ]; then
+                log "Closed $LUKS_NAME"
+                break
+            else
+                die "Failed to close $LUKS_NAME"
+            fi
+        done
+
+        if [ $STATUS -ne $CRYPT_SUCCESS ]; then
+            die "Failed to close $LUKS_NAME"
+        fi
     fi
 }
 
-# Output error and abort
-# arg1: error message
-die () {
-    echo "!!! $*"
-    exit 1
-}
+# Parse commandline args
+while getopts ':hlps' args; do
+    case "$args" in
+    h)
+        usage
+        ;;
+    l)
+        sed -nEe '3,+14 {s/^# *//; p}' $0
+        exit 1
+        ;;
+    p)
+        PRETEND=1
+        ;;
+    s)
+        TAKE_MODE=1
+        ;;
+    *)
+        echo "Invalid argument: -$OPTARG"
+        usage
+        ;;
+    esac
+done
+
+# Check that a mode was specified
+if [ $TAKE_MODE -eq 0 ]; then
+    echo "No mode specified"
+    usage
+fi
+
+# Create file descriptors for syslog info and syslog err
+exec {LOG_INFO}> >(logger --id=$$ --priority daemon.info --tag snapshots_manager)
+exec {LOG_ERR}> >(logger --id=$$ --priority daemon.err --tag snapshots_manager)
 
 # Install exit handler
 trap cleanup EXIT
 
 # Only run as root
 if [ "$(id -u)" -ne 0 ]; then
-    die "Snapshots must be created as root"
+    die "Snapshots can only be managed by root ($(id -un), id=$(id -u))"
 fi
 
 # Check that the source and destination mountpoints exist
