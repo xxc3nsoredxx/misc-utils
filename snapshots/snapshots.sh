@@ -227,10 +227,56 @@ cleanup () {
 # Arg 2: target directory
 # Arg 3: snapshot name
 try_snapshot () {
-    log "Creating snapshot '$2/$3'"
-    if [ $PRETEND_MODE -eq 0 ]; then
+    log "+++ Creating snapshot '$2/$3'"
+    if [ $PRETEND -eq 0 ]; then
         if ! (btrfs subvolume snapshot -r "$1" "$2/$3"); then
             die "Error creating snapshot"
+        fi
+        sync
+    fi
+}
+
+# Try to transfer a subvolume
+# Does nothing in pretend mode
+# Mode 1, transfer subvolume arg1/arg2 into arg3 with no base
+#   Arg 1: subvolume source directory
+#   Arg 2: subvolume source name
+#   Arg 3: subvolume destination directory
+# Mode 2, transfer subvolume arg1/arg2 into arg4 with arg1/arg3 as base
+#   Arg 1: subvolume source directory
+#   Arg 2: subvolume source name
+#   Arg 3: base subvolume name
+#   Arg 4: subvolume destination directory
+try_transfer () {
+    # Mode 1, no base
+    if [ $# -eq 3 ]; then
+        log ">>> Sending $2 with no base snapshot"
+        if [ $PRETEND -eq 0 ]; then
+            if ! (btrfs send "$1/$2" | btrfs receive "$3"); then
+                die "Error sending subvolume '$1/$2'"
+            fi
+            sync
+        fi
+    # Mode 2, with base
+    elif [ $# -eq 4 ]; then
+        log ">>> Sending $1/$2 using $3 as the base"
+        if [ $PRETEND -eq 0 ]; then
+            if ! (btrfs send -p "$1/$3" "$1/$2" | btrfs receive "$4"); then
+                die "Error sending subvolume $1/$2, base $1/$3"
+            fi
+            sync
+        fi
+    fi
+}
+
+# Try to delete a snapshot
+# Arg 1: subvolume source directory
+# Arg 2: subvolume source name
+try_delete () {
+    log "--- Deleting $2 from source"
+    if [ $PRETEND -eq 0 ]; then
+        if ! (btrfs subvolume delete "$1/$2"); then
+            die "Error deleting $1/$2 from source"
         fi
         sync
     fi
@@ -243,7 +289,7 @@ while getopts ':hlnpst' args; do
         usage
         ;;
     l)
-        sed -nEe '3,+14 {s/^# *//; p}' $0
+        sed -nEe '3,+14 {s/^# *//; p}' "$0"
         exit 1
         ;;
     n)
@@ -337,18 +383,13 @@ for target in "${!SUBVOLUMES[@]}"; do
         log "No existing snapshots found on $SRC_SNAPSHOTS"
 
         try_snapshot "$target" "$target_src" "$NAME"
+        try_transfer "$target_src" "$NAME" "$target_dest"
 
-        log ">>> Sending $NAME with no base snapshot"
-        if ! (btrfs send "$target_src/$NAME" | btrfs receive "$target_dest"); then
-            die "Error sending subvolume '$target_src/$NAME'"
-        fi
-        sync
         continue
     fi
 
-    src_prev="${list_src[-1]}"
-
     # Check if most recent src snapshot is up to date
+    src_prev="${list_src[-1]}"
     if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
         log "SRC snapshot '$target_src/$src_prev' is out of date"
 
@@ -361,37 +402,26 @@ for target in "${!SUBVOLUMES[@]}"; do
 
     # Check if most recent dest snapshot is up to date
     dest_prev="${list_dest[-1]}"
-
     if [[ "$dest_prev" < "$src_prev" ]]; then
         log "DEST snapshot '$target_dest/$dest_prev' is out of date"
 
         # Determine if incremental send is used
         if [ ${#list_src[@]} -ge 2 ]; then
-            log ">>> Sending $target_src/$src_prev using ${list_src[-2]} as the base"
-            if ! (btrfs send -p "$target_src/${list_src[-2]}" "$target_src/$src_prev" | btrfs receive "$target_dest"); then
-                die "Error sending subvolume $target_src/$src_prev, base $target_src/${list_src[-2]}"
-            fi
-            sync
+            try_transfer "$target_src" "$src_prev" "${list_src[-2]}" "$target_dest"
         else
-            log ">>> Sending $target_src/$src_prev with no base snapshot"
-            if ! (btrfs send "$target_src/$src_prev" | btrfs receive "$target_dest"); then
-                die "Error sending subvolume $target_src/$src_prev"
-            fi
-            sync
+            try_transfer "$target_src" "$src_prev" "$target_dest"
         fi
+    fi
 
-        # Check for expired src snapshots
-        # Only delete if there are > 2 snapshots so that incremental send works
-        if [ ${#list_src[@]} -gt 2 ]; then
-            if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
-                log "Expired snapshot '$target_src/${list_src[0]}'"
-                if ! (btrfs subvolume delete "$target_src/${list_src[0]}"); then
-                    die "Error deleting $target_src/${list_src[0]} from source"
-                fi
-            fi
-        else
-            log "Not enough snapshots in '$target_src' to expire"
+    # Check for expired src snapshots
+    # Only delete if there are > 2 snapshots so that incremental send works
+    if [ ${#list_src[@]} -gt 2 ]; then
+        if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
+            log "Expired snapshot '$target_src/${list_src[0]}'"
+            try_delete "$target_src" "${list_src[0]}"
         fi
+    else
+        log "Not enough snapshots in '$target_src' to expire"
     fi
 done
 
