@@ -127,25 +127,66 @@ die () {
     exit 1
 }
 
+# Try to mount a drive
+# Arg 1: prefix to use in namerefs
+# Possible values:
+#   'src'
+#   'dest'
+try_mount () {
+    # Create namerefs, convert the prefix to ALL CAPS
+    local -n mountpoint="${1^^?}_SNAPSHOTS"
+    local -n device="${1^^?}_SNAPSHOTS_DEV"
+    # *_MOUNT_OPTS is an array
+    local -n mount_opts="${1^^?}_MOUNT_OPTS"
+    local -n is_mounted="${1^^?}_MOUNTED"
+
+    # Check that the mountpoint exists
+    if [ ! -d "$mountpoint" ]; then
+        die "Mountpoint '$mountpoint' not found"
+    fi
+
+    # Try to mount
+    if ! (findmnt "$mountpoint" &> /dev/null); then
+        # Set IFS to create a comma separated list as required by mount(8)
+        IFS=','
+        if (mount "$device" "$mountpoint" -o "${mount_opts[*]}" &> /dev/null); then
+            IFS="$OLD_IFS"
+            log "Mounted $mountpoint"
+            is_mounted=1
+        else
+            IFS="$OLD_IFS"
+            die "Failed to mount $mountpoint"
+        fi
+    else
+        log "$mountpoint already mounted"
+    fi
+}
+
+# Try to unmount a drive
+# Only unmounts if it was mounted by the script
+# Arg 1: prefix to use in namerefs
+# Possible values:
+#   'src'
+#   'dest'
+try_unmount () {
+    # Create namerefs, convert the prefix to ALL CAPS
+    local -n is_mounted="${1^^?}_MOUNTED"
+    local -n mountpoint="${1^^?}_SNAPSHOTS"
+
+    if [ $is_mounted -eq 1 ]; then
+        if ! (umount "$mountpoint"); then
+            die "Failed to unmount $mountpoint"
+        fi
+
+        log "Unmounted $mountpoint"
+        sleep 0.1
+    fi
+}
+
 # Only close/unmount any drives opened/mounted by the script
 cleanup () {
-    if [ $SRC_MOUNTED -eq 1 ]; then
-        if ! (umount "$SRC_SNAPSHOTS"); then
-            die "Failed to unmount $SRC_SNAPSHOTS"
-        fi
-
-        log "Unmounted $SRC_SNAPSHOTS"
-        sleep 0.1
-    fi
-
-    if [ $DEST_MOUNTED -eq 1 ]; then
-        if ! (umount "$DEST_SNAPSHOTS"); then
-            die "Failed to unmount $DEST_SNAPSHOTS"
-        fi
-
-        log "Unmounted $DEST_SNAPSHOTS"
-        sleep 0.1
-    fi
+    try_unmount 'src'
+    try_unmount 'dest'
 
     if [ $LUKS_OPENED -eq 1 ]; then
         # Attempt to close LUKS device. If busy, wait a bit and retry a few
@@ -196,7 +237,7 @@ done
 
 # Check that only one mode was specified
 if [ $TAKE_MODE -eq 0 ]; then
-    echo "No mode specified"
+    echo "ERROR: No mode specified"
     usage
 fi
 
@@ -208,7 +249,7 @@ if [ $TAKE_MODE -eq 1 ]; then
 
     DEST_SNAPSHOTS_DEV="$TAKE_DEST_SNAPSHOTS_DEV"
     DEST_SNAPSHOTS="$TAKE_DEST_SNAPSHOTS"
-    DEST_MOUNT_OPTS="$TAKE_DEST_MOUNT_OPTS"
+    DEST_MOUNT_OPTS=("${TAKE_DEST_MOUNT_OPTS[@]}")
 
     declare -n SUBVOLUMES=TAKE_SUBVOLUMES
 fi
@@ -225,14 +266,6 @@ if [ "$(id -u)" -ne 0 ]; then
     die "Snapshots can only be managed by root ($(id -un), id=$(id -u))"
 fi
 
-# Check that the source and destination mountpoints exist
-if [ ! -d "$SRC_SNAPSHOTS" ]; then
-    die "Mountpoint '$SRC_SNAPSHOTS' not found"
-fi
-if [ ! -d "$DEST_SNAPSHOTS" ]; then
-    die "Mountpoint '$DEST_SNAPSHOTS' not found"
-fi
-
 # Check that valid dates were acquired
 if [ $TAKE_MODE -eq 1 ]; then
     if [ -z "$DESIRED_PREV" ]; then
@@ -243,37 +276,12 @@ if [ $TAKE_MODE -eq 1 ]; then
     fi
 fi
 
-# Mount the snapshot source
-if ! (findmnt "$SRC_SNAPSHOTS" &> /dev/null); then
-    # Set IFS to create a comma separated list as required by mount(8)
-    IFS=','
-    if (mount "$SRC_SNAPSHOTS_DEV" "$SRC_SNAPSHOTS" -o "${SRC_MOUNT_OPTS[*]}" &> /dev/null); then
-        IFS="$OLD_IFS"
-        echo "Mounted $SRC_SNAPSHOTS"
-        SRC_MOUNTED=1
-    else
-        IFS="$OLD_IFS"
-        die "Failed to mount $SRC_SNAPSHOTS"
-    fi
-else
-    echo "$SRC_SNAPSHOTS already mounted"
-fi
+# Try to mount the snapshot source and destination
+try_mount 'src'
+try_mount 'dest'
 
-# Mount the snapshot destination
-if ! (findmnt "$DEST_SNAPSHOTS" &> /dev/null); then
-    # Set IFS to create a comma separated list as required by mount(8)
-    IFS=','
-    if (mount "$DEST_SNAPSHOTS_DEV" "$DEST_SNAPSHOTS" -o "${DEST_MOUNT_OPTS[*]}" &> /dev/null); then
-        IFS="$OLD_IFS"
-        echo "Mounted $DEST_SNAPSHOTS"
-        DEST_MOUNTED=1
-    else
-        IFS="$OLD_IFS"
-        die "Failed to mount $DEST_SNAPSHOTS"
-    fi
-else
-    echo "$DEST_SNAPSHOTS already mounted"
-fi
+findmnt
+exit
 
 # Loop through the keys of the SUBVOLUMES map
 for target in "${!SUBVOLUMES[@]}"; do
