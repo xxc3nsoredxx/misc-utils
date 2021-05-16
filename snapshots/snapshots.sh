@@ -19,6 +19,7 @@
 # TODO: flag for taking snapshots
 # TODO: pretend mode for taking snapshots
 # TODO: flag for transfering snapshots
+# TODO: loop deleting all expired snapshots
 
 
 # Ensure the return value of a pipeline is 0 only if all commands in it succeed
@@ -108,7 +109,7 @@ usage () {
     echo "          and it's already configured to dump output to sylog."
     echo "    -p    pretend"
     echo "          Does everything except for touching snapshots."
-    echo "          Doesn't write to syslog."
+    echo "          Implies -n ."
     echo "    -s    snapshot mode"
     echo "          Take snapshots"
     echo "    -t    transfer mode"
@@ -120,7 +121,7 @@ usage () {
 # arg1: message
 log () {
     echo "$*"
-    if [ $PRETEND -eq 0 ] && [ $NO_SYSLOG -eq 0 ]; then
+    if [ $NO_SYSLOG -eq 0 ]; then
         echo "$*" >&$LOG_INFO
     fi
 }
@@ -129,7 +130,7 @@ log () {
 # arg1: error message
 die () {
     echo "!!! $*" >&2
-    if [ $PRETEND -eq 0 ] && [ $NO_SYSLOG -eq 0 ]; then
+    if [ $NO_SYSLOG -eq 0 ]; then
         echo "!!! $*" >&$LOG_ERR
     fi
     exit 1
@@ -220,6 +221,21 @@ cleanup () {
     fi
 }
 
+# Try to take a snapshot
+# Does nothing in pretend mode
+# Arg 1: source subvolume
+# Arg 2: target directory
+# Arg 3: snapshot name
+try_snapshot () {
+    log "Creating snapshot '$2/$3'"
+    if [ $PRETEND_MODE -eq 0 ]; then
+        if ! (btrfs subvolume snapshot -r "$1" "$2/$3"); then
+            die "Error creating snapshot"
+        fi
+        sync
+    fi
+}
+
 # Parse commandline args
 while getopts ':hlnpst' args; do
     case "$args" in
@@ -234,6 +250,7 @@ while getopts ':hlnpst' args; do
         NO_SYSLOG=1
         ;;
     p)
+        NO_SYSLOG=1
         PRETEND=1
         ;;
     s)
@@ -318,10 +335,8 @@ for target in "${!SUBVOLUMES[@]}"; do
     # If no snapshots exist, make one
     if [ ${#list_src[@]} -eq 0 ]; then
         log "No existing snapshots found on $SRC_SNAPSHOTS"
-        if ! (btrfs subvolume snapshot -r "$target" "$target_src/$NAME"); then
-            die "Error taking snapshot '$target_src/$NAME'"
-        fi
-        sync
+
+        try_snapshot "$target" "$target_src" "$NAME"
 
         log ">>> Sending $NAME with no base snapshot"
         if ! (btrfs send "$target_src/$NAME" | btrfs receive "$target_dest"); then
@@ -331,37 +346,36 @@ for target in "${!SUBVOLUMES[@]}"; do
         continue
     fi
 
-    src_prev=${list_src[-1]}
+    src_prev="${list_src[-1]}"
 
     # Check if most recent src snapshot is up to date
     if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
         log "SRC snapshot '$target_src/$src_prev' is out of date"
 
-        if ! (btrfs subvolume snapshot -r "$target" "$target_src/$NAME"); then
-            die "Error taking snapshot '$target_src/$NAME'"
-        fi
-        sync
+        try_snapshot "$target" "$target_src" "$NAME"
+
+        # Add to the end of src snapshots list and set as previous snapshot
         list_src=("${list_src[@]}" "$NAME")
         src_prev=$NAME
     fi
 
     # Check if most recent dest snapshot is up to date
-    dest_prev=${list_dest[-1]}
+    dest_prev="${list_dest[-1]}"
 
     if [[ "$dest_prev" < "$src_prev" ]]; then
         log "DEST snapshot '$target_dest/$dest_prev' is out of date"
 
         # Determine if incremental send is used
         if [ ${#list_src[@]} -ge 2 ]; then
-            log ">>> Sending $target_src/${list_src[-1]} using ${list_src[-2]} as the base"
-            if ! (btrfs send -p "$target_src/${list_src[-2]}" "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"); then
-                die "Error sending subvolume $target_src/${list_src[-1]}, base $target_src/${list_src[-2]}"
+            log ">>> Sending $target_src/$src_prev using ${list_src[-2]} as the base"
+            if ! (btrfs send -p "$target_src/${list_src[-2]}" "$target_src/$src_prev" | btrfs receive "$target_dest"); then
+                die "Error sending subvolume $target_src/$src_prev, base $target_src/${list_src[-2]}"
             fi
             sync
         else
-            log ">>> Sending $target_src/${list_src[-1]} with no base snapshot"
-            if ! (btrfs send "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"); then
-                die "Error sending subvolume $target_src/${list_src[-1]}"
+            log ">>> Sending $target_src/$src_prev with no base snapshot"
+            if ! (btrfs send "$target_src/$src_prev" | btrfs receive "$target_dest"); then
+                die "Error sending subvolume $target_src/$src_prev"
             fi
             sync
         fi
