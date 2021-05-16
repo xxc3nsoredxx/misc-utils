@@ -18,6 +18,7 @@
 
 # TODO: flag to determine if run by cron
 # TODO: flag for taking snapshots
+# TODO: pretend mode for taking snapshots
 # TODO: flag for transfering snapshots
 
 
@@ -28,8 +29,6 @@ set -o pipefail
 # Declare *_SUBVOLUMES to be an associative array (ie, map)
 declare -A TAKE_SUBVOLUMES
 declare -A XFER_SUBVOLUMES
-# Assigned once a mode is chosen
-declare -A SUBVOLUMES
 
 # Import config file
 . snapshots.conf
@@ -43,6 +42,17 @@ OPTIND=1
 PRETEND=0
 # Set by -s
 TAKE_MODE=0
+
+# Assigned once a mode is chosen
+SRC_SNAPSHOTS_DEV=''
+SRC_SNAPSHOTS=''
+declare -a SRC_MOUNT_OPTS
+DEST_SNAPSHOTS_DEV=''
+DEST_SNAPSHOTS=''
+declare -a DEST_MOUNT_OPTS
+# Declared as a nameref pointing to a map when a mode is chosen
+unset SUBVOLUMES
+
 # Set defaults for log file descriptors (stdout, stderr)
 LOG_INFO=1
 LOG_ERR=2
@@ -50,6 +60,7 @@ LOG_ERR=2
 STATUS=0
 # Save the IFS value so it can be restored when needed
 OLD_IFS="$IFS"
+
 # Flags to control what is cleaned up
 SRC_MOUNTED=0
 DEST_MOUNTED=0
@@ -183,10 +194,23 @@ while getopts ':hlps' args; do
     esac
 done
 
-# Check that a mode was specified
+# Check that only one mode was specified
 if [ $TAKE_MODE -eq 0 ]; then
     echo "No mode specified"
     usage
+fi
+
+# Set up for taking snapshots
+if [ $TAKE_MODE -eq 1 ]; then
+    SRC_SNAPSHOTS_DEV="$TAKE_SRC_SNAPSHOTS_DEV"
+    SRC_SNAPSHOTS="$TAKE_SRC_SNAPSHOTS"
+    SRC_MOUNT_OPTS=("${TAKE_SRC_MOUNT_OPTS[@]}")
+
+    DEST_SNAPSHOTS_DEV="$TAKE_DEST_SNAPSHOTS_DEV"
+    DEST_SNAPSHOTS="$TAKE_DEST_SNAPSHOTS"
+    DEST_MOUNT_OPTS="$TAKE_DEST_MOUNT_OPTS"
+
+    declare -n SUBVOLUMES=TAKE_SUBVOLUMES
 fi
 
 # Create file descriptors for syslog info and syslog err
@@ -210,11 +234,13 @@ if [ ! -d "$DEST_SNAPSHOTS" ]; then
 fi
 
 # Check that valid dates were acquired
-if [ -z "$DESIRED_PREV" ]; then
-    die "Invalid date string '$DESIRED_PREV_CUTOFF'"
-fi
-if [ -z "$EXPIRED" ]; then
-    die "Invalid date string '$EXPIRED_CUTOFF'"
+if [ $TAKE_MODE -eq 1 ]; then
+    if [ -z "$DESIRED_PREV" ]; then
+        die "Invalid date string '$DESIRED_PREV_CUTOFF'"
+    fi
+    if [ -z "$EXPIRED" ]; then
+        die "Invalid date string '$EXPIRED_CUTOFF'"
+    fi
 fi
 
 # Mount the snapshot source
@@ -249,7 +275,10 @@ else
     echo "$DEST_SNAPSHOTS already mounted"
 fi
 
+# Loop through the keys of the SUBVOLUMES map
 for target in "${!SUBVOLUMES[@]}"; do
+    log "$target:"
+
     target_src="$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}"
     target_dest="$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}"
 
@@ -259,10 +288,16 @@ for target in "${!SUBVOLUMES[@]}"; do
 
     # If no snapshots exist, make one
     if [ ${#list_src[@]} -eq 0 ]; then
-        echo "No existing snapshots found for $target"
-        btrfs subvolume snapshot -r "$target" "$target_src/$NAME"
+        log "No existing snapshots found on $SRC_SNAPSHOTS"
+        if ! (btrfs subvolume snapshot -r "$target" "$target_src/$NAME"); then
+            die "Error taking snapshot '$target_src/$NAME'"
+        fi
         sync
-        btrfs send "$target_src/$NAME" | btrfs receive "$target_dest"
+
+        log ">>> Sending $NAME with no base snapshot"
+        if ! (btrfs send "$target_src/$NAME" | btrfs receive "$target_dest"); then
+            die "Error sending subvolume '$target_src/$NAME'"
+        fi
         sync
         continue
     fi
@@ -271,9 +306,11 @@ for target in "${!SUBVOLUMES[@]}"; do
 
     # Check if most recent src snapshot is up to date
     if [[ "$src_prev" < "$DESIRED_PREV" ]]; then
-        echo "SRC snapshot '$target_src/$src_prev' is out of date"
+        log "SRC snapshot '$target_src/$src_prev' is out of date"
 
-        btrfs subvolume snapshot -r "$target" "$target_src/$NAME"
+        if ! (btrfs subvolume snapshot -r "$target" "$target_src/$NAME"); then
+            die "Error taking snapshot '$target_src/$NAME'"
+        fi
         sync
         list_src=("${list_src[@]}" "$NAME")
         src_prev=$NAME
@@ -283,29 +320,36 @@ for target in "${!SUBVOLUMES[@]}"; do
     dest_prev=${list_dest[-1]}
 
     if [[ "$dest_prev" < "$src_prev" ]]; then
-        echo "DEST snapshot '$target_dest/$dest_prev' is out of date"
+        log "DEST snapshot '$target_dest/$dest_prev' is out of date"
 
         # Determine if incremental send is used
         if [ ${#list_src[@]} -ge 2 ]; then
-            echo "Previous snapshot of $target is at $target_src/${list_src[-2]}"
-            btrfs send -p "$target_src/${list_src[-2]}" "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"
+            log ">>> Sending $target_src/${list_src[-1]} using ${list_src[-2]} as the base"
+            if ! (btrfs send -p "$target_src/${list_src[-2]}" "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"); then
+                die "Error sending subvolume $target_src/${list_src[-1]}, base $target_src/${list_src[-2]}"
+            fi
             sync
         else
-            echo "No previous snapshot to use as base"
-            btrfs send "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"
+            log ">>> Sending $target_src/${list_src[-1]} with no base snapshot"
+            if ! (btrfs send "$target_src/${list_src[-1]}" | btrfs receive "$target_dest"); then
+                die "Error sending subvolume $target_src/${list_src[-1]}"
+            fi
             sync
         fi
-        echo "Sending $target_src/${list_src[-1]} complete"
 
         # Check for expired src snapshots
         # Only delete if there are > 2 snapshots so that incremental send works
         if [ ${#list_src[@]} -gt 2 ]; then
             if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
-                echo "Expired snapshot '$target_src/${list_src[0]}'"
-                btrfs subvolume delete "$target_src/${list_src[0]}"
+                log "Expired snapshot '$target_src/${list_src[0]}'"
+                if ! (btrfs subvolume delete "$target_src/${list_src[0]}"); then
+                    die "Error deleting $target_src/${list_src[0]} from source"
+                fi
             fi
         else
-            echo "Not enough snapshots in '$target_src' to expire"
+            log "Not enough snapshots in '$target_src' to expire"
         fi
     fi
 done
+
+log "Done!"
