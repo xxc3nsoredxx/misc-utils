@@ -16,7 +16,6 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO: flag to determine if run by cron
 # TODO: flag for taking snapshots
 # TODO: pretend mode for taking snapshots
 # TODO: flag for transfering snapshots
@@ -38,10 +37,14 @@ declare -A XFER_SUBVOLUMES
 ################################################################################
 # Reset getopts index
 OPTIND=1
+# Set by -n
+NO_SYSLOG=0
 # Set by -p
 PRETEND=0
 # Set by -s
 TAKE_MODE=0
+# Set by -t
+XFER_MODE=0
 
 # Assigned once a mode is chosen
 SRC_SNAPSHOTS_DEV=''
@@ -93,18 +96,23 @@ CRYPT_EXISTS_BUSY=5
 usage () {
     echo "Usage: $0 [args]"
     echo "NOTE: requires root permissions to run"
-    echo "NOTE: modes are mutually exclusive"
+    echo "NOTE: modes are mutually exclusive. Uses last one parsed by getopt."
     echo ""
     echo "Args:"
     echo "    -h    help"
     echo "          Display this help."
     echo "    -l    license"
     echo "          Display license info."
+    echo "    -n    no syslog"
+    echo "          Don't write to syslog. Useful for example when run by cron"
+    echo "          and it's already configured to dump output to sylog."
     echo "    -p    pretend"
     echo "          Does everything except for touching snapshots."
     echo "          Doesn't write to syslog."
     echo "    -s    snapshot mode"
     echo "          Take snapshots"
+    echo "    -t    transfer mode"
+    echo "          Transfer snapshots"
     exit 1
 }
 
@@ -112,7 +120,7 @@ usage () {
 # arg1: message
 log () {
     echo "$*"
-    if [ "$PRETEND" -eq 0 ]; then
+    if [ $PRETEND -eq 0 ] && [ $NO_SYSLOG -eq 0 ]; then
         echo "$*" >&$LOG_INFO
     fi
 }
@@ -121,7 +129,7 @@ log () {
 # arg1: error message
 die () {
     echo "!!! $*" >&2
-    if [ "$PRETEND" -eq 0 ]; then
+    if [ $PRETEND -eq 0 ] && [ $NO_SYSLOG -eq 0 ]; then
         echo "!!! $*" >&$LOG_ERR
     fi
     exit 1
@@ -213,7 +221,7 @@ cleanup () {
 }
 
 # Parse commandline args
-while getopts ':hlps' args; do
+while getopts ':hlnpst' args; do
     case "$args" in
     h)
         usage
@@ -222,11 +230,19 @@ while getopts ':hlps' args; do
         sed -nEe '3,+14 {s/^# *//; p}' $0
         exit 1
         ;;
+    n)
+        NO_SYSLOG=1
+        ;;
     p)
         PRETEND=1
         ;;
     s)
         TAKE_MODE=1
+        XFER_MODE=0
+        ;;
+    t)
+        TAKE_MODE=0
+        XFER_MODE=1
         ;;
     *)
         echo "Invalid argument: -$OPTARG"
@@ -235,8 +251,8 @@ while getopts ':hlps' args; do
     esac
 done
 
-# Check that only one mode was specified
-if [ $TAKE_MODE -eq 0 ]; then
+# Check that a mode was specified
+if [ $TAKE_MODE -eq 0 ] && [ $XFER_MODE -eq 0 ]; then
     echo "ERROR: No mode specified"
     usage
 fi
@@ -252,6 +268,12 @@ if [ $TAKE_MODE -eq 1 ]; then
     DEST_MOUNT_OPTS=("${TAKE_DEST_MOUNT_OPTS[@]}")
 
     declare -n SUBVOLUMES=TAKE_SUBVOLUMES
+fi
+
+# Set up for transfering snapshots
+if [ $XFER_MODE -eq 1 ]; then
+    echo 'Transfer mode not implemented yet!'
+    exit 1
 fi
 
 # Create file descriptors for syslog info and syslog err
@@ -280,7 +302,6 @@ fi
 try_mount 'src'
 try_mount 'dest'
 
-findmnt
 exit
 
 # Loop through the keys of the SUBVOLUMES map
