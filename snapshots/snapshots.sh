@@ -19,7 +19,6 @@
 # TODO: flag for taking snapshots
 # TODO: pretend mode for taking snapshots
 # TODO: flag for transfering snapshots
-# TODO: loop deleting all expired snapshots
 
 
 # Ensure the return value of a pipeline is 0 only if all commands in it succeed
@@ -416,10 +415,12 @@ for target in "${!SUBVOLUMES[@]}"; do
     # Check for expired src snapshots
     # Only delete if there are > 2 snapshots so that incremental send works
     if [ ${#list_src[@]} -gt 2 ]; then
-        if [[ "${list_src[0]}" < "$EXPIRED" ]]; then
-            log "Expired snapshot '$target_src/${list_src[0]}'"
-            try_delete "$target_src" "${list_src[0]}"
-        fi
+        for del in "${list_src[@]}"; do
+            if [[ "$del" < "$EXPIRED" ]]; then
+                log "Expired snapshot '$target_src/$del'"
+                try_delete "$target_src" "$del"
+            fi
+        done
     else
         log "Not enough snapshots in '$target_src' to expire"
     fi
