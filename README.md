@@ -48,55 +48,51 @@ Companion script for [locking the machine when my Yubikey is removed][yubikey].
    * Designed to be run as part of a system service
 
 ## snapshots
-A set of bash scripts for managing BTRFS snapshots.
-These scripts must be run as root.
+A bash script for managing BTRFS snapshots.
+Has two modes: one for taking snapshots and one for transfering snapshots.
+Various options can be set in the [`snapshots.conf` config file][snapshots config].
 
-### snapshots.sh
-Takes snapshots of a BTRFS filesystem.
-Uses the number of existing snapshots of a given subvolume to determine if incremental send is used.
-Assumes that the destination has *at least* the same snapshots as the source.
-The default snapshot name is of the form `YYYY-MM-DD`.
+### Taking snapshots
+Initiated with the `-s` option.
+
+Takes a snapshot of the configured subvolumes and uses `btrfs send | btrfs receive` to transfer them to a separate drive.
+Determines if incremental send is used based on the number of existing snapshots of a given subvolume.
+Assumes that the destination has _at least_ the same snapshots as the source.
+
+The default format for snapshot names is `YYYY-MM-DD`.
 Designed to be run at regular intervals in a cron job.
-The script can be run repeatedly to verify that snapshots have been taken.
-This means that if the machine was not powered on when the regularly scheduled run would take place, a snapshot would be made next time the script is run.
-Also deletes old snapshots after `btrfs send | btrfs receive` is done.
-No snapshots are deleted unless there are at least 2 remaining.
-My setup takes a snapshot every Saturday, checks every 3 hours (at the bottom of the hour) to make sure the snapshots aren't out of date, and deletes snapshots that are > 5 weeks old.
+The script can be run repeatedly to trivially verify that snapshots have been taken.
+If the regularly scheduled snapshot was missed, the next run will make up for it.
+Also has trivial facilities for keeping the snapshots in sync.
+It will check to see if the most recent snapshot on the destination is the same as the one on the source.
+If the source has a newer snapshot, it will be sent to the destination.
 
- * `SRC_SNAPSHOTS` is the path to the main snapshot subvolume
- * `DEST_SNAPSHOTS` is the path to the backup snapshot subvolume (prefarably on a separate storage medium)
- * `SUBVOLUMES` is an associative array of `[path] -> [subvolume name]` to describe what needs to be snapshotted
- * `NAME` is the name given to a snapshot
-    * Must be unique each time a snapshot is taken
-    * Must be sortable in chronological order by name
- * `DESIRED_PREV` is the name that would have been given to the snapshot during a regular run
-    * Used to compare with the latest existing snapshot
-    * Sets the frequency that snapshots will be made
- * `EXPIRED` is the name of the oldest snapshot you want to keep on the main snapshot volume
+Snapshots older than the configured expiration threshold will be deleted from the source in order to save space.
+No snapshots are deleted unless at least 2 exist so that incremental send will continue to function nicely.
 
-### transfer.sh
+My setup takes a snapshot after every Saturday, checks every 3 hours (at the bottom of the hour) to make sure the snapshots aren't out of date, and deletes snapshots that are > 5 weeks old.
+
+### Transfering snapshots
+Initiated with the `-t` option.
+
 Transfers snapshots from one drive to another.
 The destination drive is encrypted using LUKS.
 The accompanying `udev` rule creates a symlink called `/dev/ss_crypt` pointing to the partition with the LUKS container.
-Snapshots older than `OLDEST_CUTOFF` will be moved, automatically determining the appropriate base snapshot based on what exists on the destination, and deleting moved snapshots from the source.
-The most recent snapshot older than the cutoff will be retained in order to maintain a common base between the source and destination drives.
 
-The following variables can be set in `transfer.conf`:
-* `SRC_SNAPSHOTS_DEV`
-* `SRC_SNAPSHOTS`
-* `SRC_MOUNT_OPTS`
-* `DEST_SNAPSHOTS`
-* `DEST_MOUNT_OPTS`
-* `LUKS_KEYFILE`
-* `SUBVOLUMES`
-* `OLDEST_CUTOFF`
+Snapshots older than the cutoff will be moved, automatically determining the appropriate base snapshot based on what exists on the destination.
+The moved snapshot is then deleted from the source drive.
+The exception being the most recent snapshot older than the cutoff.
+This one is retained in order to maintain a common base between the source and destination drives for incremental send.
 
-Pre-requisites:
+### Requirements (general)
+* Must be run as root
+* `sys-fs/btrfs-progs`
+
+### Requirements (transfer mode)
+* `sys-fs/cryptsetup`
 * A drive set up with BTRFS in a LUKS2 container
-* `SS_CRYPT` as the label of the LUKS device
 * Encrypted using a key-file instead of password input
-* Snapshots named in a sortable fashion
-    * This and `snapshots.sh` use `date(1)` for naming
+* `SS_CRYPT` as the label given in the LUKS2 header
 
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
@@ -125,4 +121,5 @@ This userscript automatically redirects to Outlook when the annoying page is det
 
 <!-- link refs -->
 [yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
+[snapshots config]: snapshots/snapshots.conf
 [outlook redir]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/outlook_logout_redirect.user.js
