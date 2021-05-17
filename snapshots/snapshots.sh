@@ -54,10 +54,9 @@ declare -a DEST_MOUNT_OPTS
 # Declared as a nameref pointing to a map when a mode is chosen
 unset SUBVOLUMES
 
-# Set defaults for log file descriptors (stdout, stderr)
+# Set defaults for log file descriptors
 LOG_INFO=1
 LOG_ERR=2
-# Ensure the variable used to hold exit codes is unused/reset
 STATUS=0
 # Save the IFS value so it can be restored when needed
 OLD_IFS="$IFS"
@@ -78,7 +77,7 @@ EXPIRED="$(date -I --date="$TAKE_EXPIRED_CUTOFF")"
 # Variables related to transfering snapshots
 ################################################################################
 # Oldest snapshot to keep on source
-OLDEST=$(date -I --date="$XFER_OLDEST_CUTOFF")
+OLDEST="$(date -I --date="$XFER_OLDEST_CUTOFF")"
 # udev creates a symlink /dev/ss_crypt pointing to the partition
 LUKS_NAME='ss_crypt'
 LUKS_DEVICE="/dev/$LUKS_NAME"
@@ -113,8 +112,8 @@ usage () {
     exit 1
 }
 
-# Send message to syslog (except in pretend mode and run by cron)
-# arg1: message
+# Send message to syslog (except if -n)
+# Arg 1: message
 log () {
     echo "$*"
     if [ $NO_SYSLOG -eq 0 ]; then
@@ -122,8 +121,8 @@ log () {
     fi
 }
 
-# Send error to syslog (except in pretend mode and run by cron) and abort
-# arg1: error message
+# Send error to syslog (except if -n) and abort
+# Arg 1: error message
 die () {
     echo "!!! $*" >&2
     if [ $NO_SYSLOG -eq 0 ]; then
@@ -145,25 +144,24 @@ try_mount () {
     local -n mount_opts="${1^^?}_MOUNT_OPTS"
     local -n is_mounted="${1^^?}_MOUNTED"
 
-    # Check that the mountpoint exists
+    # Check that the mountpoint exists, then try to mount
     if [ ! -d "$mountpoint" ]; then
         die "Mountpoint '$mountpoint' not found"
     fi
 
-    # Try to mount
     if ! (findmnt "$mountpoint" &> /dev/null); then
         # Set IFS to create a comma separated list as required by mount(8)
         IFS=','
         if (mount "$device" "$mountpoint" -o "${mount_opts[*]}" &> /dev/null); then
             IFS="$OLD_IFS"
-            log "Mounted $mountpoint"
+            log "Mounted '$mountpoint'"
             is_mounted=1
         else
             IFS="$OLD_IFS"
-            die "Failed to mount $mountpoint"
+            die "Failed to mount '$mountpoint'"
         fi
     else
-        log "$mountpoint already mounted"
+        log "'$mountpoint' already mounted"
     fi
 }
 
@@ -180,10 +178,10 @@ try_unmount () {
 
     if [ $is_mounted -eq 1 ]; then
         if ! (umount "$mountpoint"); then
-            die "Failed to unmount $mountpoint"
+            die "Failed to unmount '$mountpoint'"
         fi
 
-        log "Unmounted $mountpoint"
+        log "Unmounted '$mountpoint'"
         sleep 0.1
     fi
 }
@@ -194,19 +192,19 @@ try_unmount () {
 try_open () {
     # Check that udev's symlink exists
     if [ ! -e "/dev/$1" ]; then
-        die "/dev/$1 not found"
+        die "'/dev/$1' not found"
     fi
 
     # Open LUKS crypt
     cryptsetup --key-file "$2" open --type luks "/dev/$1" "$1"
     STATUS=$?
     if [ $STATUS -eq $CRYPT_SUCCESS ]; then
-        log "Opened /dev/$1 as $1"
+        log "Opened '/dev/$1' as '$1'"
         LUKS_OPENED=1
     elif [ $STATUS -eq $CRYPT_EXISTS_BUSY ]; then
-        log "$1 already opened"
+        log "'$1' already opened"
     else
-        die "Failed to open /dev/$1 as $1"
+        die "Failed to open '/dev/$1' as '$1'"
     fi
 }
 
@@ -217,27 +215,27 @@ try_close () {
         # Attempt to close LUKS device. If busy, wait a bit and retry a few
         # times. Error if all unsuccessful.
         for i in {1..3}; do
-            log "Attempt $i to close $1"
+            log "Attempt $i to close '$1'"
             cryptsetup close "$1"
             STATUS=$?
 
             if [ $STATUS -eq $CRYPT_EXISTS_BUSY ]; then
-                sleep 0.1
+                sleep 1
             elif [ $STATUS -eq $CRYPT_SUCCESS ]; then
-                log "Closed $1"
+                log "Closed '$1'"
                 break
             else
-                die "Failed to close $1"
+                die "Failed to close '$1'"
             fi
         done
 
         if [ $STATUS -ne $CRYPT_SUCCESS ]; then
-            die "Failed to close $1"
+            die "Failed to close '$1'"
         fi
     fi
 }
 
-# Only close/unmount any drives opened/mounted by the script
+# Exit handler to close/unmount filesystems
 cleanup () {
     try_unmount 'src'
     try_unmount 'dest'
@@ -250,7 +248,7 @@ cleanup () {
 # Arg 2: target directory
 # Arg 3: snapshot name
 try_snapshot () {
-    log "+++ Creating snapshot '$2/$3'"
+    log "+++ Creating snapshot $3"
     if [ $PRETEND -eq 0 ]; then
         if ! (btrfs subvolume snapshot -r "$1" "$2/$3"); then
             die "Error creating snapshot"
@@ -273,7 +271,7 @@ try_snapshot () {
 try_transfer () {
     # Mode 1, no base
     if [ $# -eq 3 ]; then
-        log ">>> Sending $2 with no base snapshot"
+        log ">>> Sending $2 with no base"
         if [ $PRETEND -eq 0 ]; then
             if ! (btrfs send "$1/$2" | btrfs receive "$3"); then
                 die "Error sending subvolume '$1/$2'"
@@ -285,7 +283,7 @@ try_transfer () {
         log ">>> Sending $2 using $3 as the base"
         if [ $PRETEND -eq 0 ]; then
             if ! (btrfs send -p "$1/$3" "$1/$2" | btrfs receive "$4"); then
-                die "Error sending subvolume $1/$2, base $1/$3"
+                die "Error sending subvolume '$1/$2', base '$1/$3'"
             fi
             sync
         fi
@@ -299,7 +297,7 @@ try_delete () {
     log "--- Deleting $2 from source"
     if [ $PRETEND -eq 0 ]; then
         if ! (btrfs subvolume delete "$1/$2"); then
-            die "Error deleting $1/$2 from source"
+            die "Error deleting '$1/$2'"
         fi
         sync
     fi
@@ -339,7 +337,7 @@ done
 
 # Check that a mode was specified
 if [ $TAKE_MODE -eq 0 ] && [ $XFER_MODE -eq 0 ]; then
-    echo "ERROR: No mode specified"
+    echo "!!! No mode specified"
     usage
 fi
 
@@ -354,10 +352,8 @@ if [ $TAKE_MODE -eq 1 ]; then
     DEST_MOUNT_OPTS=("${TAKE_DEST_MOUNT_OPTS[@]}")
 
     declare -n SUBVOLUMES=TAKE_SUBVOLUMES
-fi
-
 # Set up for transfering snapshots
-if [ $XFER_MODE -eq 1 ]; then
+elif [ $XFER_MODE -eq 1 ]; then
     SRC_SNAPSHOTS_DEV="$XFER_SRC_SNAPSHOTS_DEV"
     SRC_SNAPSHOTS="$XFER_SRC_SNAPSHOTS"
     SRC_MOUNT_OPTS=("${XFER_SRC_MOUNT_OPTS[@]}")
@@ -370,18 +366,16 @@ if [ $XFER_MODE -eq 1 ]; then
 fi
 
 # Create file descriptors for syslog info and syslog err
-exec {LOG_INFO}> >(logger --id=$$ --priority daemon.info --tag snapshots_manager)
-exec {LOG_ERR}> >(logger --id=$$ --priority daemon.err --tag snapshots_manager)
+exec {LOG_INFO}> >(logger --id=$$ --priority user.info --tag snapshots_manager)
+exec {LOG_ERR}> >(logger --id=$$ --priority user.err --tag snapshots_manager)
 
 # Install exit handler
 trap cleanup EXIT
 
-# Only run as root
 if [ "$(id -u)" -ne 0 ]; then
     die "Snapshots can only be managed by root ($(id -un), id=$(id -u))"
 fi
 
-# Try to mount the snapshot source and destination
 try_mount 'src'
 if [ $XFER_MODE -eq 1 ]; then
     try_open "$LUKS_NAME" "$XFER_LUKS_KEYFILE"
@@ -399,8 +393,7 @@ if [ $TAKE_MODE -eq 1 ]; then
 
     log "Desired previous: $DESIRED_PREV"
     log "Expired: $EXPIRED"
-fi
-if [ $XFER_MODE -eq 1 ]; then
+elif [ $XFER_MODE -eq 1 ]; then
     if [ -z "$OLDEST" ]; then
         die "Invalid date string '$XFER_OLDEST_CUTOFF'"
     fi
@@ -408,14 +401,14 @@ if [ $XFER_MODE -eq 1 ]; then
     log "Oldest: $OLDEST"
 fi
 
-# Loop through the keys of the SUBVOLUMES map
+# Loop through the keys of the SUBVOLUMES map (mountpoints)
 for target in "${!SUBVOLUMES[@]}"; do
-    log "$target:"
+    log "${SUBVOLUMES[$target]} @ $target:"
 
     target_src="$SRC_SNAPSHOTS/${SUBVOLUMES[$target]}"
     target_dest="$DEST_SNAPSHOTS/${SUBVOLUMES[$target]}"
 
-    # Get the list of snapshots
+    # Get the current list of snapshots
     mapfile -t list_src < <(ls "$target_src")
     mapfile -t list_dest < <(ls "$target_dest")
 
@@ -423,7 +416,7 @@ for target in "${!SUBVOLUMES[@]}"; do
     if [ $TAKE_MODE -eq 1 ]; then
         # If no snapshots exist, make one
         if [ ${#list_src[@]} -eq 0 ]; then
-            log "No existing snapshots found on $SRC_SNAPSHOTS"
+            log "No existing snapshots found on '$SRC_SNAPSHOTS'"
 
             try_snapshot "$target" "$target_src" "$NAME"
             try_transfer "$target_src" "$NAME" "$target_dest"
@@ -439,7 +432,7 @@ for target in "${!SUBVOLUMES[@]}"; do
 
             # Add to the end of src snapshots list and set as previous snapshot
             list_src=("${list_src[@]}" "$NAME")
-            src_prev=$NAME
+            src_prev="$NAME"
         fi
 
         # Check if most recent dest snapshot is up to date
@@ -459,7 +452,7 @@ for target in "${!SUBVOLUMES[@]}"; do
         if [ ${#list_src[@]} -gt 2 ]; then
             for del in "${list_src[@]}"; do
                 if [[ "$del" < "$EXPIRED" ]]; then
-                    log "Expired snapshot '$target_src/$del'"
+                    log "Expired snapshot: $del"
                     try_delete "$target_src" "$del"
                 fi
             done
@@ -471,10 +464,10 @@ for target in "${!SUBVOLUMES[@]}"; do
         # Get the most recent snapshot on the destination drive to use as a base
         base=''
         if [ ${#list_dest} -eq 0 ]; then
-            log "No '$target' snapshots on $LUKS_NAME"
+            log "No snapshots on $LUKS_NAME"
         else
             base=${list_dest[-1]}
-            log "Most recent '$target' snapshot on $LUKS_NAME: $base"
+            log "Most recent snapshot on $LUKS_NAME: $base"
         fi
 
         # Transfer snapshots
@@ -489,7 +482,8 @@ for target in "${!SUBVOLUMES[@]}"; do
                 elif [ -z "$base" ]; then
                     try_transfer "$target_src" "$ss" "$target_dest"
                 # Normal case
-                # Newest on destination is used as the base, sends second oldest on source
+                # Newest on destination is used as the base, sends second
+                # oldest on source
                 else
                     try_transfer "$target_src" "$ss" "$base" "$target_dest"
 
@@ -499,10 +493,8 @@ for target in "${!SUBVOLUMES[@]}"; do
                 fi
 
                 # Update base
-                base=$ss
+                base="$ss"
             fi
         done
     fi
 done
-
-log "Done!"
