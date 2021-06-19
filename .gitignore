@@ -7,14 +7,16 @@
 # Include directories
 !*/
 
-# Include Makefiles
-!Makefile
-!makefile
-
 # Include LICENSE
 !LICENSE
 
 # Begin actual ignores
+# Autotools
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.*
+
 *.o
 *.ko
 *.so

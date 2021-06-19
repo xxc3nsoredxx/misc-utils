@@ -1,0 +1,7 @@
+if WANT_SNAPSHOTS
+    SNAPSHOTS = snapshots
+endif
+
+SUBDIRS = $(SNAPSHOTS)
+
+EXTRA_DIST = README.md LICENSE

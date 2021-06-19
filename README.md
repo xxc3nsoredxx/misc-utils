@@ -1,6 +1,14 @@
 # misc-utils
 A collection of miscellaneous little utils that I don't feel deserve a full repo.
 
+### Autotoolization in progress
+This repo is slowly being packaged by Autotools.
+By default installs everything under `/usr/local`.
+Re-run `./configure` to change what is installed and under what prefix.
+
+### ebuild in progress
+The whole reason for autotoolizing the repo is that I can write a nice ebuild for it.
+
 ## cross\_arm
 Creates an ARM cross-compiler toolchain.
 Originally created for a class that dealt with ARM binaries in some assignments.
@@ -93,6 +101,9 @@ This one is retained in order to maintain a common base between the source and d
 * A drive set up with BTRFS in a LUKS2 container
 * Encrypted using a key-file instead of password input
 * `SS_CRYPT` as the label given in the LUKS2 header
+
+### Configure options
+* `--enable-snapshots`
 
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
