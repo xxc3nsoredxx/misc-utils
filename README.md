@@ -1,6 +1,38 @@
 # misc-utils
 A collection of miscellaneous little utils that I don't feel deserve a full repo.
 
+### Autotoolization in progress
+This repo is slowly being packaged by Autotools.
+
+**Note:** All of the following utils present in the repo or tarball in their final form are configured to use the `/usr/local` prefix with the exception of `--sysconfdir=/etc`.
+If installing using Autotools, make sure to specify the system config directory.
+
+Currently autotoolized:
+ * snapshots
+
+### Installing
+Run:
+```bash
+./configure --sysconfdir=PATH_TO_SYSTEM_CONFIG_DIR
+make
+make install
+```
+
+By default all utils are enabled and will be built/installed.
+To selectively leave out `util` run:
+```bash
+./configure --disable-util
+```
+
+The relevant option for each util is listed in its description below.
+Alternatively, to see a full list of configure options run:
+```bash
+./configure --help
+```
+
+### ebuild in progress
+The whole reason for autotoolizing the repo is that I can write a nice ebuild for it.
+
 ## cross\_arm
 Creates an ARM cross-compiler toolchain.
 Originally created for a class that dealt with ARM binaries in some assignments.
@@ -89,10 +121,14 @@ This one is retained in order to maintain a common base between the source and d
 * `sys-fs/btrfs-progs`
 
 ### Requirements (transfer mode)
+* An implementation of `udev`
 * `sys-fs/cryptsetup`
 * A drive set up with BTRFS in a LUKS2 container
 * Encrypted using a key-file instead of password input
 * `SS_CRYPT` as the label given in the LUKS2 header
+
+### Configure options
+* `--enable-snapshots`
 
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
