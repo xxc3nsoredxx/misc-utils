@@ -1,6 +1,8 @@
 # -*- autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
+# TODO: Autotoolize the udev rule to specify configurable crypt name
+
 m4_define([misc-utils-VERSION], [0.1])
 AC_PREREQ([2.69])
 AC_INIT([xxc3nsoredxx Miscellaneous Utilities],
@@ -17,7 +19,7 @@ AC_ARG_ENABLE([snapshots],
     [AS_HELP_STRING([--enable-snapshots],
         [Enables the BTRFS snapshot management scripts])],
     [want_snapshots="$enableval"],
-    [want_snapshots="no"])
+    [want_snapshots="yes"])
 
 AM_CONDITIONAL([WANT_SNAPSHOTS],
     [test "x$want_snapshots" = "xyes"])
@@ -29,6 +31,6 @@ AC_CONFIG_FILES([snapshots/Makefile])
 # Warn if nothing is enabled
 AS_CASE(["x$want_snapshots"],
     [x*yes*], [],
-    [AC_MSG_WARN([nothing selected for install with '--enable-*'])])
+    [AC_MSG_WARN([nothing selected for build/install])])
 
 AC_OUTPUT
