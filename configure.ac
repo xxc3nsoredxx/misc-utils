@@ -2,6 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 # TODO: Autotoolize the udev rule to specify configurable crypt name
+# TODO: Install udev rules into /lib/udev/rules.d
 
 m4_define([misc-utils-VERSION], [0.1])
 AC_PREREQ([2.69])
