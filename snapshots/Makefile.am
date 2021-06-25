@@ -1,7 +1,5 @@
-configdir = $(sysconfdir)/misc-utils
-udevdir = $(sysconfdir)/udev/rules.d
-
 dist_bin_SCRIPTS = snapshots.sh
+# Automake creates configdir/udevdir variables from AC_SUBST in configure.ac
 dist_config_DATA = snapshots.conf
 dist_udev_DATA = 99-ss_crypt.rules
 
