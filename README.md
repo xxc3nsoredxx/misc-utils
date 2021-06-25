@@ -30,8 +30,13 @@ Alternatively, to see a full list of configure options run:
 ./configure --help
 ```
 
-### ebuild in progress
-The whole reason for autotoolizing the repo is that I can write a nice ebuild for it.
+### Installing (Gentoo)
+The package can be installed through Portage after adding [my overlay][unc3nsored].
+```
+eselect repository enable unc3nsored
+emaint sync -r unc3nsored
+emerge app-admin/misc-utils
+```
 
 ## cross\_arm
 Creates an ARM cross-compiler toolchain.
@@ -156,6 +161,7 @@ This userscript automatically redirects to Outlook when the annoying page is det
 
 
 <!-- link refs -->
+[unc3nsored]: https://github.com/xxc3nsoredxx/unc3nsored
 [yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
 [snapshots config]: snapshots/snapshots.conf
 [outlook redir]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/outlook_logout_redirect.user.js
