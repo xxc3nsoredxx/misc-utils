@@ -2,9 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 # TODO: Autotoolize the udev rule to specify configurable crypt name
-# TODO: Install udev rules into /lib/udev/rules.d
 
-m4_define([misc-utils-VERSION], [0.1])
+m4_define([misc-utils-VERSION], [0.1.1])
 AC_PREREQ([2.69])
 AC_INIT([xxc3nsoredxx Miscellaneous Utilities],
     m4_defn([misc-utils-VERSION]),
@@ -16,14 +15,31 @@ AC_CONFIG_SRCDIR([snapshots/snapshots.sh.in])
 # eg. --program-transform-name='s/.sh$//' to remove .sh suffix
 AC_ARG_PROGRAM
 
+AC_ARG_WITH([udevdir],
+    [AS_HELP_STRING([--with-udevdir=DIR],
+        [udev rules directory [SYSCONFDIR/udev/rules.d]])],
+    [udevdir="$withval"],
+    [udevdir='$(sysconfdir)/udev/rules.d'])
+AS_CASE(["x$udevdir"],
+    # Use default if udevdir is "yes" (ie, called with --with-udevdir)
+    [xyes], [AC_MSG_WARN([no udev rules directory given in --with-udevdir, using default])]
+            [udevdir='$(sysconfdir)/udev/rules.d'],
+    # Use default if udevdir is empty (ie, called with --with-udevdir=)
+    [x], [AC_MSG_WARN([empty udev rules directory given in --with-udevdir, using default])]
+         [udevdir='$(sysconfdir)/udev/rules.d'],
+    # Otherwise assume a good path is given
+    [])
+AC_SUBST([udevdir], [$udevdir])
+
 AC_ARG_ENABLE([snapshots],
     [AS_HELP_STRING([--enable-snapshots],
         [Enables the BTRFS snapshot management scripts])],
     [want_snapshots="$enableval"],
     [want_snapshots="yes"])
-
 AM_CONDITIONAL([WANT_SNAPSHOTS],
     [test "x$want_snapshots" = "xyes"])
+
+AC_SUBST([configdir], ['$(sysconfdir)/misc-utils'])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects -Wall -Werror])
 AC_CONFIG_FILES([Makefile])

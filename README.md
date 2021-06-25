@@ -4,7 +4,8 @@ A collection of miscellaneous little utils that I don't feel deserve a full repo
 ### Autotoolization in progress
 This repo is slowly being packaged by Autotools.
 
-**Note:** All of the following utils present in the repo or tarball in their final form are configured to use the `/usr/local` prefix with the exception of `--sysconfdir=/etc`.
+**Note:** All of the following utils present in the repo or tarball in their final form are configured to use the default `/usr/local` prefix with the exception of `--sysconfdir=/etc`.
+The default installation directory for udev rules is `$(sysconfdir)/udev/rules.d`.
 If installing using Autotools, make sure to specify the system config directory.
 
 Currently autotoolized:
