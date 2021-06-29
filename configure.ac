@@ -3,7 +3,7 @@
 
 # TODO: Autotoolize the udev rule to specify configurable crypt name
 
-m4_define([misc-utils-VERSION], [0.1.1])
+m4_define([misc-utils-VERSION], [0.1.2])
 AC_PREREQ([2.69])
 AC_INIT([xxc3nsoredxx Miscellaneous Utilities],
     m4_defn([misc-utils-VERSION]),

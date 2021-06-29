@@ -29,12 +29,12 @@ declare -A TAKE_SUBVOLUMES
 declare -A XFER_SUBVOLUMES
 
 # Import config file
-CONFIG_FILE='/tmp/etc/misc-utils/snapshots.conf'
+CONFIG_FILE='/etc/misc-utils/snapshots.conf'
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "!!! Config file not found: '$CONFIG_FILE'"
     exit 1
 fi
-. /tmp/etc/misc-utils/snapshots.conf
+. /etc/misc-utils/snapshots.conf
 
 ################################################################################
 # Common variables
