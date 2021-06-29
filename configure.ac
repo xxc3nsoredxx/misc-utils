@@ -40,10 +40,12 @@ AM_CONDITIONAL([WANT_SNAPSHOTS],
     [test "x$want_snapshots" = "xyes"])
 
 AC_SUBST([configdir], ['$(sysconfdir)/misc-utils'])
+AC_SUBST([crondir], ['$(sysconfdir)/cron.d'])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects -Wall -Werror])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([snapshots/Makefile])
+AC_CONFIG_FILES([snapshots/gen_cron.sh], [chmod +x snapshots/gen_cron.sh])
 
 # Warn if nothing is enabled
 AS_CASE(["x$want_snapshots"],
