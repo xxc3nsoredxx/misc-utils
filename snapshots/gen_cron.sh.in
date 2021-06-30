@@ -36,5 +36,5 @@ cat > "$1" << EOF
 SHELL=$CRON_SHELL
 PATH=$CRON_PATH
 MAILTO=$CRON_MAILTO
-${CRON_MINUTES:-*} ${CRON_HOURS:-*} ${CRON_DAYS_MONTH:-*} ${CRON_MONTHS:-*} ${CRON_DAYS_WEEK:-*} root $(echo 'snapshots.sh' | sed -e $transform)
+${CRON_MINUTES:-*} ${CRON_HOURS:-*} ${CRON_DAYS_MONTH:-*} ${CRON_MONTHS:-*} ${CRON_DAYS_WEEK:-*} root $(echo 'snapshots.sh' | sed -e $transform) -ns
 EOF

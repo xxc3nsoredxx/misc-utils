@@ -1,4 +1,4 @@
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 MAILTO=root
-30 0,3,6,9,12,15,18,21 * * * root snapshots.sh
+30 0,3,6,9,12,15,18,21 * * * root snapshots.sh -ns
