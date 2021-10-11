@@ -156,6 +156,7 @@ So link embeds won't have the URL shortener replaced since, AFAIK, the actual UR
 NOTE 2:
 I make no promises on this script not grinding the tab to a halt if someone tweets an `https://t.co` link.
 In fact, it wouldn't surprise me in the slightest.
+OK, so really it probably won't since the URL replacement is triggered by the `onscroll` event.
 
 [Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js)
 
