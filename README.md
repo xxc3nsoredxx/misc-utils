@@ -139,7 +139,7 @@ This one is retained in order to maintain a common base between the source and d
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
 
-### fuck\_you\_t\_co
+### Fuck You t.co
 You know how when you hover over a link in a web browser it shows the link in the bottom left?
 That's a reasonable way to know that what you're about to click will actually take you where you expect it to, right?
 Right?
@@ -160,7 +160,7 @@ OK, so really it probably won't since the URL replacement is triggered by the `o
 
 [Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js)
 
-### mobile\_to\_desktop
+### Mobile to Desktop
 Redirects a mobile page to a desktop page.
 Inspired by all the people on Reddit posting links to https://en.m.wikipedia.org which, for some reason, doesn't go to the desktop page on desktop browsers.
 The other way around works just fine -- desktop Wikipedia on a mobile browser redirects to mobile Wikipedia.
@@ -172,7 +172,7 @@ A completely unintentional side effect of the link automatically being generated
 
 [Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
 
-### outlook\_logout\_redirect
+### Outlook Logout Redirect
 Sometimes the Outlook session will be automatically logged out.
 When this happens, going to Outlook instead gives an annoying page that says "You signed out of your account."
 This requires going _back to the address bar_ to enter the Outlook URL again which will go to the login page.
