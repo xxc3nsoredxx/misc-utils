@@ -137,9 +137,30 @@ This one is retained in order to maintain a common base between the source and d
 * `--enable-snapshots`
 
 ## userscripts
-A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
+A collection of scripts loaded into [Greasemonkey][greasemonkey].
 
-### mobile\_to\_desktop
+### Fuck You t.co
+You know how when you hover over a link in a web browser it shows the link in the bottom left?
+That's a reasonable way to know that what you're about to click will actually take you where you expect it to, right?
+Right?
+_RIGHT!?_
+Well, on Twitter when you hover over a link in a tweet you'll see something like this `https://t.co/FuckYou?amp=1` instead of `https://example.com`.
+I don't know about you, but I think hiding the destination URL is kind of a dick move.
+This userscript will re-inject the original URL into the tweet.
+Now when you hover over the link it'll match what the poster _actually_ wanted to share with everyone.
+
+NOTE:
+This only works for links which fully exist in the tweet.
+So link embeds won't have the URL shortener replaced since, AFAIK, the actual URL is nowhere to be found.
+
+NOTE 2:
+I make no promises on this script not grinding the tab to a halt if someone tweets an `https://t.co` link.
+In fact, it wouldn't surprise me in the slightest.
+OK, so really it probably won't since the URL replacement is triggered by the `onscroll` event.
+
+[Click here to install the userscript][fuck you]
+
+### Mobile to Desktop
 Redirects a mobile page to a desktop page.
 Inspired by all the people on Reddit posting links to https://en.m.wikipedia.org which, for some reason, doesn't go to the desktop page on desktop browsers.
 The other way around works just fine -- desktop Wikipedia on a mobile browser redirects to mobile Wikipedia.
@@ -149,9 +170,9 @@ More will be added if/as needed.
 You can use the Wikipedia link above to conveniently test the script after installation.
 A completely unintentional side effect of the link automatically being generated for the text.
 
-[Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
+[Click here to install the userscript][mobile to desktop]
 
-### outlook\_logout\_redirect
+### Outlook Logout Redirect
 Sometimes the Outlook session will be automatically logged out.
 When this happens, going to Outlook instead gives an annoying page that says "You signed out of your account."
 This requires going _back to the address bar_ to enter the Outlook URL again which will go to the login page.
@@ -165,4 +186,7 @@ This userscript automatically redirects to Outlook when the annoying page is det
 [unc3nsored]: https://github.com/xxc3nsoredxx/unc3nsored
 [yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
 [snapshots config]: snapshots/snapshots.conf
+[greasemonkey]: https://www.greasespot.net
+[fuck you]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js
+[mobile to desktop]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js
 [outlook redir]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/outlook_logout_redirect.user.js
