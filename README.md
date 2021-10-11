@@ -137,7 +137,7 @@ This one is retained in order to maintain a common base between the source and d
 * `--enable-snapshots`
 
 ## userscripts
-A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
+A collection of scripts loaded into [Greasemonkey][greasemonkey].
 
 ### Fuck You t.co
 You know how when you hover over a link in a web browser it shows the link in the bottom left?
@@ -158,7 +158,7 @@ I make no promises on this script not grinding the tab to a halt if someone twee
 In fact, it wouldn't surprise me in the slightest.
 OK, so really it probably won't since the URL replacement is triggered by the `onscroll` event.
 
-[Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js)
+[Click here to install the userscript][fuck you]
 
 ### Mobile to Desktop
 Redirects a mobile page to a desktop page.
@@ -170,7 +170,7 @@ More will be added if/as needed.
 You can use the Wikipedia link above to conveniently test the script after installation.
 A completely unintentional side effect of the link automatically being generated for the text.
 
-[Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js)
+[Click here to install the userscript][mobile to desktop]
 
 ### Outlook Logout Redirect
 Sometimes the Outlook session will be automatically logged out.
@@ -186,4 +186,7 @@ This userscript automatically redirects to Outlook when the annoying page is det
 [unc3nsored]: https://github.com/xxc3nsoredxx/unc3nsored
 [yubikey]: https://github.com/xxc3nsoredxx/xxc3nsoredxx/tree/master/yubikey_linux_2fa
 [snapshots config]: snapshots/snapshots.conf
+[greasemonkey]: https://www.greasespot.net
+[fuck you]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js
+[mobile to desktop]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/mobile_to_desktop.user.js
 [outlook redir]: https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/outlook_logout_redirect.user.js
