@@ -139,6 +139,26 @@ This one is retained in order to maintain a common base between the source and d
 ## userscripts
 A collection of scripts loaded into [Greasemonkey](https://www.greasespot.net).
 
+### fuck\_you\_t\_co
+You know how when you hover over a link in a web browser it shows the link in the bottom left?
+That's a reasonable way to know that what you're about to click will actually take you where you expect it to, right?
+Right?
+_RIGHT!?_
+Well, on Twitter when you hover over a link in a tweet you'll see something like this `https://t.co/FuckYou?amp=1` instead of `https://example.com`.
+I don't know about you, but I think hiding the destination URL is kind of a dick move.
+This userscript will re-inject the original URL into the tweet.
+Now when you hover over the link it'll match what the poster _actually_ wanted to share with everyone.
+
+NOTE:
+This only works for links which fully exist in the tweet.
+So link embeds won't have the URL shortener replaced since, AFAIK, the actual URL is nowhere to be found.
+
+NOTE 2:
+I make no promises on this script not grinding the tab to a halt if someone tweets an `https://t.co` link.
+In fact, it wouldn't surprise me in the slightest.
+
+[Click here to install the userscript](https://github.com/xxc3nsoredxx/misc-utils/raw/master/userscripts/fuck_you_t_co.user.js)
+
 ### mobile\_to\_desktop
 Redirects a mobile page to a desktop page.
 Inspired by all the people on Reddit posting links to https://en.m.wikipedia.org which, for some reason, doesn't go to the desktop page on desktop browsers.
