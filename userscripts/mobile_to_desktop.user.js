@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Mobile to Desktop
 // @namespace   https://github.com/xxc3nsoredxx/misc-utils/
-// @version     1
+// @version     1.1
 // @author      xxc3nsoredxx
 // @description Changes from a mobile page to a desktop page
 // @run-at      document-start
@@ -15,7 +15,7 @@ const targets = [
 for (let cx = 0; cx < targets.length; cx++) {
   const cur = window.location;
   const matches = cur.hostname.match(targets[cx]);
-  
+
   // Match found
   if (matches) {
     const prot = cur.protocol;
