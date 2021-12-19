@@ -94,5 +94,5 @@ sed -i -e "/KERNEL/d" $REPO_ROOT/etc/portage/profile/use.force
 # Create the cross-compiler
 echo "Creating toolchain for $TARGET..."
 crossdev    --target $TARGET    \
-            --stage3            \
+            --stage4            \
             --portage -a --portage -v
