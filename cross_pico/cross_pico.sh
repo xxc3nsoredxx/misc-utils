@@ -1,7 +1,7 @@
-#!/bin/bash
+#! /bin/bash
 
 #   Script to build Arm cross-compiler toolchain targetting RPi Pico
-#   Copyright (C) 2021  Oskari Pirhonen <xxc3ncoredxx@gmail.com>
+#   Copyright (C) 2021-2022  Oskari Pirhonen <xxc3ncoredxx@gmail.com>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -15,13 +15,6 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-# Determine host toolchain versions (so cross toolchain matches)
-#BINVERSION=$(equery -q l sys-devel/binutils | awk -e 'BEGIN{FS="-"} {printf "%s-%s", $3, $4}')
-#KERNELVERSION=$(equery -q l sys-kernel/gentoo-sources | awk -e 'BEGIN{FS="-"} {print $NF}')
-#GCCVERSION=$(equery -q l sys-devel/gcc | awk -e 'BEGIN{FS="-"} {printf "%s-%s", $(NF-1), $NF}')
-#LIBCVERSION=$(equery -q l sys-libs/glibc | awk -e 'BEGIN{FS="-"} {printf "%s-%s", $(NF-1), $NF}')
 
 # Target architecture
 TARGET_SHORT="arm"
@@ -48,8 +41,6 @@ if [ -d $REPODIR ]; then
     find / -xdev -ipath "*${TARGET}*" ! -ipath '*repos/gentoo*' -delete
 fi
 
-#exit
-
 # Create overlay
 echo "Creating repo $REPO ..."
 mkdir -p $REPODIR/{profiles,metadata}
@@ -70,14 +61,11 @@ echo "Linking the repo's temp dir to /var/tmp"
 ln -s /var/tmp $REPO_ROOT/tmp
 
 # What we want
-#CONF_ARCH="arm"
 CONF_CFLAGS="-O2 -pipe -fomit-frame-pointer -march=armv6-m -mtune=cortex-m0plus -mthumb"
 CONF_MAKEOPTS="-j$(nproc)"
 CONF_FEATURES="-collision-protect candy ipc-sandbox network-sandbox noman noinfo nodoc parallel-fetch parallel-install preserve-libs sandbox userfetch userpriv usersandbox usersync"
 
 # Modify overlay's make.conf
-#echo "Setting ARCH=\"$CONF_ARCH\""
-#sed -i -e "/^CHOST/i ARCH=\"$CONF_ARCH\"" $REPO_ROOT/etc/portage/make.conf
 echo "Setting CFLAGS=\"$CONF_CFLAGS\""
 sed -i -e "/^CFLAGS/c CFLAGS=\"$CONF_CFLAGS\"" $REPO_ROOT/etc/portage/make.conf
 echo "Setting FEATURES=\"$CONF_FEATURES\""
@@ -88,8 +76,6 @@ sed -i -e "/^CXXFLAGS/a MAKEOPTS=\"$CONF_MAKEOPTS\"" $REPO_ROOT/etc/portage/make
 echo "Fixing kernel settings"
 sed -i -e "s/ __KERNEL__//" $REPO_ROOT/etc/portage/profile/make.defaults
 sed -i -e "/KERNEL/d" $REPO_ROOT/etc/portage/profile/use.force
-
-#exit
 
 # Create the cross-compiler
 echo "Creating toolchain for $TARGET..."
