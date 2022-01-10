@@ -75,6 +75,7 @@ Re-emerges the package at the end (which will clean up any installed but unused 
 ### Requirements
  * Must be run as root
  * `savedconfig` USE flag for `sys-kernel/linux-firmware` is set
+ * `CONFIG_GENTOO_PRINT_FIRMWARE` set to get the list of firmware loaded at boot into `dmesg(1)`
 
 ## root\_lock
 If root is logged in, locks the machine requiring the root password to unlock.
