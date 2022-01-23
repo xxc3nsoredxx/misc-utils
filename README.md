@@ -56,6 +56,17 @@ For example, the version of GCC which is installed can be invoked using `$TARGET
  * `app-portage/gentoolkit`
    * Uses `equery(1)` to determine existing package version
 
+## cross\_pico
+Creates a bare-metal Arm cross-compiler toolchain using newlib as the libc implementation.
+The intended target is the Raspberry Pi Pico which uses the RP2040, an Arm Cortex-M0+ based microcontroller.
+Should work for other RP2040 and Cortex-M0+ based devices.
+
+The toolchain is installed into the `cross-arm-none-eabi` overlay and can be invoked as `arm-none-eabi-*`.
+
+### Requirements
+ * Must be run as root
+ * `sys-devel/crossdev`
+
 ## genhash
 Creates an `/etc/shadow`-friendly SHA-512 hash given a password and a salt.
 `crypt(3)` allows for up to 16 characters in the salt from the character set `[a-zA-Z0-9./]`.
