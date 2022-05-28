@@ -1,0 +1,17 @@
+# Array containing the sizes of each desired zram device
+Z_SIZE=('20G' '10G')
+
+# Array containing the initialization command for each zram device
+Z_INIT=('mkfs.btrfs -q' 'mkfs.btrfs -q')
+
+# Array containing the mountpoint for each zram device
+Z_MOUNT=('/var/tmp/portage' '/tmp')
+
+# Array containing the desired mode for each filesystem
+Z_MODE=('0775' '1777')
+
+# Array containing the user:group for each filesystem
+Z_OWNER=('portage:portage' 'root:root')
+
+# Determine if SELinux contexts need to be set
+Z_SELINUX='yes'

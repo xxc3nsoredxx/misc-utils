@@ -1,0 +1,39 @@
+#!/sbin/openrc-run
+# Copyright 2021 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+name="zram"
+description="initialize the necessary zram devices"
+
+depend() {
+    need root
+    before localmount
+}
+
+start() {
+    local n_dev="${#Z_SIZE[@]}"
+    modprobe zram num_devices="$n_dev"
+
+    for i in $(seq 0 $((n_dev - 1))); do
+        ebegin "Initializing zram$i of size: ${Z_SIZE[$i]}"
+            echo "${Z_SIZE[$i]}" > "/sys/block/zram$i/disksize"
+            eval "${Z_INIT[$i]} /dev/zram$i"
+            fstabinfo -M "${Z_MOUNT[$i]}"
+            eval "chmod -R ${Z_MODE[$i]} ${Z_MOUNT[$i]}"
+            eval "chown -R ${Z_OWNER[$i]} ${Z_MOUNT[$i]}"
+            yesno "$Z_SELINUX" && restorecon "${Z_MOUNT[$i]}"
+        eend 0
+    done
+}
+
+stop() {
+    local n_dev="${#Z_SIZE[@]}"
+
+    for i in $(seq 0 $((n_dev - 1))); do
+        ebegin "Resetting zram$i"
+            echo 1 > "/sys/block/zram$i/reset"
+        eend 0
+    done
+
+    modprobe -r zram
+}
