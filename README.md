@@ -67,6 +67,37 @@ The toolchain is installed into the `cross-arm-none-eabi` overlay and can be inv
  * Must be run as root
  * `sys-devel/crossdev`
 
+## etc\_portage\_convert
+Does a naive conversion of `/etc/portage` from flat files into directory trees.
+If something is already a directory, it's left untouched.
+
+Before:
+```
+/etc/portage
++- make.conf
++- package.accept_keywords
++- package.license
++- package.use/
+   +- some_package_use_flags
+```
+
+After:
+```
+/etc/portage
++- make.conf
++- package.accept_keywords/
+|  +- package.accept_keywords.orig
++- package.license/
+|  +- package.license.orig
++- package.use/
+   +- some_package_use_flags
+```
+
+### Requirements
+ * Must be run as root
+ * `sys-apps/gentoo-functions` (optional)
+   * For the snazzy Gentoo output functions
+
 ## genhash
 Creates an `/etc/shadow`-friendly SHA-512 hash given a password and a salt.
 `crypt(3)` allows for up to 16 characters in the salt from the character set `[a-zA-Z0-9./]`.
