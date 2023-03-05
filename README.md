@@ -67,17 +67,7 @@ The toolchain is installed into the `cross-arm-none-eabi` overlay and can be inv
  * Must be run as root
  * `sys-devel/crossdev`
 
-## genhash
-Creates an `/etc/shadow`-friendly SHA-512 hash given a password and a salt.
-`crypt(3)` allows for up to 16 characters in the salt from the character set `[a-zA-Z0-9./]`.
-A salt argument longer than 16 characters gets truncated down, and invalid characters get converted into '.'.
-To compile, just run `make` in the `genhash/` directory.
-
-```
-Usage: genhash [password] [salt]
-```
-
-## only\_required\_firmware
+## filter\_firmware
 A bash script to filter the config file for the Gentoo package `sys-kernel/linux-firmware`.
 Parses the output of `modinfo` for each module given by `lsmod` for required firmware files.
 I recommend rebooting after updating the package so that any new firmware files get loaded and are found by the script.
@@ -87,6 +77,16 @@ Re-emerges the package at the end (which will clean up any installed but unused 
  * Must be run as root
  * `savedconfig` USE flag for `sys-kernel/linux-firmware` is set
  * `CONFIG_GENTOO_PRINT_FIRMWARE` set to get the list of firmware loaded at boot into `dmesg(1)`
+
+## genhash
+Creates an `/etc/shadow`-friendly SHA-512 hash given a password and a salt.
+`crypt(3)` allows for up to 16 characters in the salt from the character set `[a-zA-Z0-9./]`.
+A salt argument longer than 16 characters gets truncated down, and invalid characters get converted into '.'.
+To compile, just run `make` in the `genhash/` directory.
+
+```
+Usage: genhash [password] [salt]
+```
 
 ## root\_lock
 If root is logged in, locks the machine requiring the root password to unlock.
