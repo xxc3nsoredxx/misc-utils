@@ -1,7 +1,7 @@
-#! /bin/bash
+#!/usr/bin/env bash
 
 #   Script to filter sys-kernel/linux-firmware `savedconfig` file
-#   Copyright (C) 2020-2022  xxc3nsoredxx
+#   Copyright (C) 2020-2023 Oskari Pirhonen <xxc3ncoredxx@gmail.com>
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
